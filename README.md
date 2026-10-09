@@ -13,7 +13,12 @@ The whole site is one file, `index.html`. There is nothing to build or install.
   - **Wallpaper Engine** – a web wallpaper package with the same settings as properties.
   - **Image** – PNG or JPG up to 4K, ultrawide, portrait and iPhone sizes.
   - **Loop video** – exactly one loop, so it repeats without a jump.
-- **Show** – the wallpapers as a full-screen projection for a wall, a TV or a screen behind a band. They cross-fade every 30 s, 1 min or 5 min, or hold on one. With **Mic** or **Song** the picture moves with the music.
+- **Show** – the wallpapers as a full-screen projection for a wall, a TV or a screen behind a band. They cross-fade every 30 s, 1 min or 5 min, or hold on one. The picture can move with music from three sources:
+  - **Mic** – the sound in the room.
+  - **Song** – a music file the page plays itself.
+  - **Computer** – whatever the computer is playing, from a browser tab or an app such as Spotify. The browser asks which screen or tab to share; switch on its audio in that dialog. Desktop Chrome and Edge only.
+
+  Once a source is on, a fourth button sets how hard the picture reacts: **Soft**, **Hard** or **Wild**.
 
 ## Run it
 
@@ -29,7 +34,7 @@ The page needs an internet connection for its two typefaces (Google Fonts) and f
 ## Good to know
 
 - The wallpapers need WebGL. Without it the page shows plain gradients in each wallpaper's colors.
-- **Mic** needs a secure address (`https://`), which GitHub Pages provides. The browser asks for permission once. The microphone is only analysed in the page; nothing is recorded or sent anywhere.
+- **Mic** and **Computer** need a secure address (`https://`), which GitHub Pages provides, and the browser asks for permission. The sound is only analysed in the page; nothing is recorded or sent anywhere.
 - Everything is free at the moment. The store (prices, cart, locked downloads) is still in the code behind one switch: set `const FREE = true;` to `false` in `index.html`.
 - The **Dreamscreen Player** download makes a `.dreamscreen` file for a player app that does not exist yet.
 - The Lively package was built from Lively's documentation and source and checked in a test browser, not yet in Lively itself.

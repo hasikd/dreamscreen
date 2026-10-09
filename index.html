@@ -575,6 +575,8 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
     <button class="ic" type="button" id="shTime"></button>
     <button class="ic" type="button" id="shMic" aria-pressed="false" aria-label="Mic: move with the sound in the room">Mic</button>
     <button class="ic" type="button" id="shSong" aria-pressed="false" aria-label="Song: play a music file and move with it">Song</button>
+    <button class="ic" type="button" id="shPc" aria-pressed="false" aria-label="Computer: move with whatever your computer is playing" hidden>Computer</button>
+    <button class="ic" type="button" id="shForce" hidden></button>
   </div>
   <input type="file" id="shFile" accept="audio/*" hidden>
   <button class="ic sh-x" type="button" id="shClose" aria-label="Close the show"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
@@ -2213,8 +2215,17 @@ $('#xLV').onclick = guarded(exportLively); $('#xImg').onclick = guarded(exportIm
    Three smoothed values come out, each from 0 to 1: kick (a soft pulse on a bass hit), level (how loud it is overall)
    and air (the highs). Loudness is measured against the recent peak, so a quiet room and a loud club both use the whole range.
    Everything is eased, and the picture changes by a fifth at most, so it swells with the music and never strobes. */
+/* How hard the picture answers the music. sL/sK: extra speed from loudness and from a bass hit; zL/zK: zoom; iK: light on a hit;
+   g: grain from the highs; up/down: how fast a hit rises and dies away. Soft swells, Hard pumps, Wild lunges forward on every hit.
+   The force goes into motion: the light on a hit stays close to a quarter in every setting, so even Wild does not strobe. */
+const FORCE = [
+  { name: 'Soft', sL: 2.2, sK: 1.2, zL: .03, zK: .05, iK: .22, g: .25, up: 18, down: 3.2 },
+  { name: 'Hard', sL: 5, sK: 7, zL: .05, zK: .13, iK: .26, g: .4, up: 28, down: 4.5 },
+  { name: 'Wild', sL: 12, sK: 22, zL: .08, zK: .28, iK: .28, g: .6, up: 40, down: 5.5 },
+];
+const REACT_KEY = 'dreamscreen.react';
 const sound = {
-  ctx: null, an: null, bins: null, src: null, stream: null, el: null, elNode: null, url: '', mode: '',
+  ctx: null, an: null, bins: null, src: null, stream: null, el: null, elNode: null, url: '', mode: '', force: 0,
   kick: 0, level: 0, air: 0, peak: .06, bassAvg: 0,
   ensure() {
     if (!this.ctx) {
@@ -2229,6 +2240,19 @@ const sound = {
     this.stop(); this.ensure();
     const st = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     this.stream = st; this.src = this.ctx.createMediaStreamSource(st); this.src.connect(this.an); this.mode = 'mic';
+  },
+  /* the computer's own sound: the browser asks which screen or tab to share and whether to include its audio.
+     Only the audio is used, it is not played again and it never leaves the page. */
+  async pc() {
+    this.stop(); this.ensure();
+    const opt = { video: { frameRate: 1 }, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
+      systemAudio: 'include', selfBrowserSurface: 'exclude' };
+    /* keep this tab in front when another tab is the one being shared */
+    if (window.CaptureController) { try { const cc = new CaptureController(); cc.setFocusBehavior('no-focus-change'); opt.controller = cc; } catch (e) {} }
+    const st = await navigator.mediaDevices.getDisplayMedia(opt), tracks = st.getAudioTracks();
+    if (!tracks.length) { st.getTracks().forEach(t => t.stop()); const e = new Error('no audio'); e.silent = true; throw e; }
+    this.stream = st; this.src = this.ctx.createMediaStreamSource(new MediaStream(tracks)); this.src.connect(this.an); this.mode = 'pc';
+    tracks[0].addEventListener('ended', () => { if (this.stream === st) { this.stop(); soundSync(); } });      /* sharing was stopped from the browser's own bar */
   },
   file(f) {
     this.stop(); this.ensure();
@@ -2258,7 +2282,7 @@ const sound = {
     this.air = ease(this.air, Math.min(1, high * k * 1.6), 10, 3);
     this.bassAvg += (bass - this.bassAvg) * Math.min(1, dt * 2.5);
     const hit = bass > this.bassAvg * 1.25 + .02 ? Math.min(1, (bass - this.bassAvg) * k * 3) : 0;   /* bass clearly above its own average */
-    this.kick = ease(this.kick, hit, 18, 3.2);
+    const f = FORCE[this.force]; this.kick = ease(this.kick, hit, f.up, f.down);
   },
 };
 
@@ -2284,10 +2308,12 @@ const show = {
     const saved = store.get(SHOW_KEY, null); this.step = Number.isInteger(saved) && SHOW_STEPS[saved] ? saved : 1; this.label();
     this.fade.style.transition = 'none'; this.fade.style.opacity = '0';
     this.open = true; this.el.hidden = false; document.body.classList.add('show-on');
-    /* real full screen where the browser allows it; otherwise the show simply fills the page */
+    this.goFull(); this.keepAwake(); this.wake(); this.warm();
+  },
+  /* real full screen where the browser allows it; otherwise the show simply fills the page */
+  goFull() {
     const req = this.el.requestFullscreen || this.el.webkitRequestFullscreen;
     if (req) { try { const p = req.call(this.el); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
-    this.keepAwake(); this.wake(); this.warm();
   },
   close() {
     if (!this.open) return;
@@ -2326,17 +2352,17 @@ const show = {
   /* with music on, the wallpaper is drawn a little brighter, closer and grainier as the sound asks */
   cur() {
     const c = this.list[this.i]; if (!c || !sound.mode || reduced) return c;
-    const o = Object.assign(this.live, c);
-    o.intensity = c.intensity * (.86 + .14 * sound.level + .22 * sound.kick);
-    o.scale = c.scale * (1 + .03 * sound.level + .05 * sound.kick);
-    o.grain = Math.min(1, c.grain + .25 * sound.air);
+    const o = Object.assign(this.live, c), f = FORCE[sound.force];
+    o.intensity = c.intensity * (.86 + .14 * sound.level + f.iK * sound.kick);
+    o.scale = c.scale * (1 + f.zL * sound.level + f.zK * sound.kick);
+    o.grain = Math.min(1, c.grain + f.g * sound.air);
     return o;
   },
   tick(dt) {
     const c = this.list[this.i]; if (!c) return;
     if (!reduced) {
       sound.tick(dt);
-      const push = sound.mode ? 1 + 2.2 * sound.level + 1.2 * sound.kick : 1;     /* louder music, faster drift */
+      const f = FORCE[sound.force], push = sound.mode ? 1 + f.sL * sound.level + f.sK * sound.kick : 1;     /* louder music, faster drift; a hit throws it forward */
       this.phase = (this.phase + dt * c.speed * push) % (c.loop || LOOP);
       const every = SHOW_STEPS[this.step][0];
       if (every) { this.t += dt; if (this.t >= every) { this.go(1); return; } }
@@ -2354,7 +2380,28 @@ const show = {
 };
 const shMsg = $('#shMsg'); let shMsgT = 0;
 function showMsg(t) { shMsg.textContent = t; clearTimeout(shMsgT); if (t) shMsgT = setTimeout(() => { shMsg.textContent = ''; }, 6000); }
-function soundSync() { $('#shMic').setAttribute('aria-pressed', String(sound.mode === 'mic')); $('#shSong').setAttribute('aria-pressed', String(sound.mode === 'song')); }
+function soundSync() {
+  $('#shMic').setAttribute('aria-pressed', String(sound.mode === 'mic')); $('#shSong').setAttribute('aria-pressed', String(sound.mode === 'song'));
+  $('#shPc').setAttribute('aria-pressed', String(sound.mode === 'pc'));
+  const f = $('#shForce'); f.hidden = !sound.mode; f.textContent = FORCE[sound.force].name; f.setAttribute('aria-label', 'Reaction: ' + FORCE[sound.force].name + '. Press to change.');
+}
+(() => { const v = store.get(REACT_KEY, 0); if (Number.isInteger(v) && FORCE[v]) sound.force = v; })();
+/* sharing the computer's sound exists in desktop browsers only; phones do not offer it */
+$('#shPc').hidden = !(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+$('#shPc').onclick = async () => {
+  show.wake();
+  if (sound.mode === 'pc') { sound.stop(); soundSync(); return; }
+  const t0 = performance.now(); show.picking = true;          /* the browser's dialog can end full screen; that must not end the show */
+  try { await sound.pc(); showMsg(''); }
+  catch (e) {
+    sound.stop();
+    /* refused at once: the browser does not allow it here. Refused later: the person closed the dialog, which needs no message. */
+    showMsg(e && e.silent ? 'No sound came with it. Share again and switch on the audio in the dialog.' : performance.now() - t0 < 400 ? 'The computer\u2019s sound cannot be shared here.' : '');
+  }
+  show.picking = false; soundSync();
+  if (sound.mode === 'pc' && !(document.fullscreenElement || document.webkitFullscreenElement)) show.goFull();
+};
+$('#shForce').onclick = () => { sound.force = (sound.force + 1) % FORCE.length; store.set(REACT_KEY, sound.force); soundSync(); show.wake(); };
 $('#shMic').onclick = async () => {
   show.wake();
   if (sound.mode === 'mic') { sound.stop(); soundSync(); return; }
@@ -2428,7 +2475,7 @@ function frame(now) {
 bgTick(0); requestAnimationFrame(frame);
 window.addEventListener('resize', () => { bgDirty = true; studio.dirty = true; });
 /* test hook: lets an automated check read state without touching the UI */
-window.__mihot = { sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
+window.__mihot = { FORCE, sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
 })();
 </script>
 </body>
