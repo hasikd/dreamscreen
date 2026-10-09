@@ -248,6 +248,36 @@ dialog.closing::backdrop{animation:fadeout .28s ease both}
 .show .sh-row .ic[aria-pressed="true"]{opacity:1;text-decoration:underline;text-underline-offset:6px}
 .sh-msg{position:absolute;left:20px;right:20px;bottom:calc(env(safe-area-inset-bottom,0px) + 62px);z-index:2;margin:0;font-size:.84rem;color:var(--screen-fg);text-shadow:0 1px 6px #000;pointer-events:none}
 .sh-msg:empty{display:none}
+/* tune: the show's mixing desk. Five faders set how hard each part of the picture answers a hit, and the music's own
+   spectrum rises behind them. Below, the effect and the colors of the wallpaper on screen. */
+.show.tuning .sh-msg{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 18px)}
+.tune{position:absolute;left:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 58px);z-index:3;width:min(372px,calc(100% - 20px));
+  max-height:calc(100% - 76px - env(safe-area-inset-bottom,0px));overflow:auto;overscroll-behavior:contain;touch-action:pan-y;
+  display:grid;gap:20px;padding:18px 18px 20px;border:1px solid var(--line);border-radius:var(--r-screen);
+  background:rgba(14,8,18,.6);-webkit-backdrop-filter:blur(22px) saturate(1.3);backdrop-filter:blur(22px) saturate(1.3);color:var(--fg);animation:rise .5s var(--ease) both}
+.tn-sec{display:grid;gap:12px;min-width:0}
+.tn-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.tn-t{font:400 .7rem/1.1 var(--font-body);letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.tn-pre{display:flex;gap:16px}
+.tn-pre button,.tn-fx button{border:0;background:none;padding:5px 0;font:400 .7rem/1.1 var(--font-body);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);transition:color .4s}
+.tn-pre button:hover,.tn-fx button:hover{color:var(--fg)}
+.tn-pre button[aria-pressed="true"],.tn-fx button[aria-pressed="true"]{color:var(--fg);text-decoration:underline;text-underline-offset:5px}
+.tn-eq{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.tune .tn-meter{position:absolute;inset:0 0 auto 0;width:100%;height:132px;opacity:.26;pointer-events:none}
+.fd{position:relative;display:grid;justify-items:center;gap:8px;font:400 .66rem/1 var(--font-body);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.fd-t{--p:.5;position:relative;width:100%;height:132px;cursor:ns-resize;touch-action:none;-webkit-tap-highlight-color:transparent}
+.fd-t:focus-visible{outline:0}
+.fd-t::before{content:"";position:absolute;left:50%;top:12px;bottom:12px;width:3px;margin-left:-1.5px;border-radius:99px;
+  background:linear-gradient(0deg,color-mix(in srgb,var(--w1) 55%,transparent),var(--w2) 62%,var(--w3)) 0 100%/100% calc(100% * var(--p)) no-repeat,var(--track)}
+.fd-t::after{content:"";position:absolute;left:50%;bottom:calc((100% - 24px) * var(--p));width:24px;height:24px;margin-left:-12px;border-radius:50%;
+  background:radial-gradient(circle,var(--fg) 0 20%,color-mix(in srgb,var(--w3) 75%,transparent) 25%,color-mix(in srgb,var(--w2) 34%,transparent) 52%,transparent 71%);transition:transform .45s var(--ease)}
+.fd-t:hover::after{transform:scale(1.15)}
+.fd-t:active::after,.fd-t:focus-visible::after{transform:scale(1.45)}
+.fd-t:focus-visible::before{box-shadow:0 0 0 1.5px var(--fg)}
+.tn-hint{font-size:.8rem;line-height:1.45;color:var(--muted)}
+.tn-fx{display:flex;flex-wrap:wrap;gap:4px 16px}
+.tune .pal-row{gap:8px}
+.tune .pal{width:32px;height:22px}
 body.show-on{overflow:hidden}
 body.full-on{overflow:hidden}
 body.full-on .bar{visibility:hidden}
@@ -576,7 +606,26 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
     <button class="ic" type="button" id="shMic" aria-pressed="false" aria-label="Mic: move with the sound in the room">Mic</button>
     <button class="ic" type="button" id="shSong" aria-pressed="false" aria-label="Song: play a music file and move with it">Song</button>
     <button class="ic" type="button" id="shPc" aria-pressed="false" aria-label="Computer: move with whatever your computer is playing" hidden>Computer</button>
-    <button class="ic" type="button" id="shForce" hidden></button>
+    <button class="ic" type="button" id="shTune" aria-pressed="false" aria-expanded="false" aria-controls="tune" aria-label="Tune: how the picture reacts, its effect and its colors">Tune</button>
+  </div>
+  <div class="tune" id="tune" role="group" aria-label="Tune the show" hidden>
+    <div class="tn-sec">
+      <div class="tn-head"><span class="tn-t">Reaction</span><div class="tn-pre" id="tnPre" role="group" aria-label="Reaction preset"></div></div>
+      <div class="tn-eq" id="tnEq"><canvas class="tn-meter" id="tnMeter" width="336" height="132" aria-hidden="true"></canvas></div>
+      <p class="tn-hint" id="tnHint">Switch on Mic, Song or Computer and the picture moves with the music.</p>
+      <p class="tn-hint">High settings flash. Keep them low around anyone sensitive to flashing light.</p>
+    </div>
+    <div class="tn-head"><span class="tn-t">Wallpaper</span><div class="tn-pre"><button type="button" id="tnPrev">Previous</button><button type="button" id="tnNext">Next</button></div></div>
+    <div class="tn-sec"><span class="tn-t" id="tnFxT">Effect</span><div class="tn-fx" id="tnFx" role="group" aria-labelledby="tnFxT"></div></div>
+    <div class="tn-sec"><span class="tn-t">Colors</span>
+      <div class="pal-row" id="tnPal"></div>
+      <div class="color-row">
+        <label>Background<input type="color" id="tnC0"></label>
+        <label>Depth<input type="color" id="tnC1"></label>
+        <label>Main<input type="color" id="tnC2"></label>
+        <label>Highlights<input type="color" id="tnC3"></label>
+      </div>
+    </div>
   </div>
   <input type="file" id="shFile" accept="audio/*" hidden>
   <button class="ic sh-x" type="button" id="shClose" aria-label="Close the show"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
@@ -626,6 +675,25 @@ if(u_imgOn>.5){float ra=u_res.x/u_res.y;vec2 q=uv-.5;
 if(ra>u_imgAspect)q.y*=u_imgAspect/ra;else q.x*=ra/u_imgAspect;
 vec3 im=texture2D(u_img,q+.5).rgb;col=1.-(1.-im)*(1.-clamp(col*u_fxOver,0.,1.));}
 vec2 v=uv-.5;col*=mix(1.,smoothstep(.92,.2,length(v)),u_vig);
+float n=h21(fc+fract(u_seed*.37)*91.);col+=(n-.5)*(u_grain*.11+.006);
+gl_FragColor=vec4(clamp(col,0.,1.),1.);}`;
+/* The show's own main(): the same picture, plus what a drum hit does to it. u_zoom punches the picture toward the viewer,
+   u_shift jolts it sideways, u_ring is a ripple that runs outward from the middle (radius, strength, sharpness),
+   u_hue swings the colors around the wheel, u_gain and u_flash make it flare. With all of them at rest it is the picture above. */
+const MAIN_REACT = `
+uniform float u_zoom,u_gain,u_flash,u_hue;uniform vec2 u_shift;uniform vec3 u_ring;
+vec3 hueR(vec3 c,float a){const vec3 k=vec3(.57735);float ca=cos(a),sa=sin(a);return c*ca+cross(k,c)*sa+k*dot(k,c)*(1.-ca);}
+void main(){
+vec2 fc=gl_FragCoord.xy;vec2 uv0=fc/u_res;float asp=u_res.x/u_res.y;vec2 P=(fc-.5*u_res)/u_res.y;
+float r=length(P),rg=r-u_ring.x;P+=P/(r+.0001)*u_ring.y*exp(-rg*rg*u_ring.z);
+P=P/(1.+u_zoom)+u_shift;vec2 uv=vec2(P.x/asp,P.y)+.5;vec2 p=P/u_scale;
+SO=vec2(u_seed*1.731,-u_seed*.977);TP=6.2831853*fract(u_time/u_loop);
+vec3 col=effect(uv,P,p,u_time);
+if(u_imgOn>.5){vec2 q=uv-.5;
+if(asp>u_imgAspect)q.y*=u_imgAspect/asp;else q.x*=asp/u_imgAspect;
+vec3 im=texture2D(u_img,q+.5).rgb;col=1.-(1.-im)*(1.-clamp(col*u_fxOver,0.,1.));}
+col=max(hueR(col,u_hue),0.)*u_gain+u_flash*u_c3;
+vec2 v=uv0-.5;col*=mix(1.,smoothstep(.92,.2,length(v)),u_vig);
 float n=h21(fc+fract(u_seed*.37)*91.);col+=(n-.5)*(u_grain*.11+.006);
 gl_FragColor=vec4(clamp(col,0.,1.),1.);}`;
 
@@ -937,7 +1005,8 @@ const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 /* Parsed colors are cached: draw() runs every frame for several canvases. */
 const rgbCache = new Map();
 const rgbOf = h => { let v = rgbCache.get(h); if (!v) { v = hexRgb(h); rgbCache.set(h, v); } return v; };
-const UNIFORMS = ['u_res', 'u_time', 'u_loop', 'u_c0', 'u_c1', 'u_c2', 'u_c3', 'u_scale', 'u_int', 'u_grain', 'u_vig', 'u_seed', 'u_imgOn', 'u_imgAspect', 'u_fxOver', 'u_img'];
+const UNIFORMS = ['u_res', 'u_time', 'u_loop', 'u_c0', 'u_c1', 'u_c2', 'u_c3', 'u_scale', 'u_int', 'u_grain', 'u_vig', 'u_seed', 'u_imgOn', 'u_imgAspect', 'u_fxOver', 'u_img',
+  'u_zoom', 'u_gain', 'u_flash', 'u_hue', 'u_shift', 'u_ring'];
 /* One WebGL context. Options:
    preserve: keep the drawing buffer (for copying it elsewhere)
    oct:      octaves of noise (4 for small or blurred canvases, 5 by default)
@@ -945,7 +1014,7 @@ const UNIFORMS = ['u_res', 'u_time', 'u_loop', 'u_c0', 'u_c1', 'u_c2', 'u_c3', '
    power:    'low-power' (default, prefers the integrated GPU) or 'default' */
 class Stage {
   constructor(canvas, opts = {}) {
-    this.canvas = canvas; this.progs = {}; this.tex = null; this.texSrc = null; this.lost = false; this.oct = opts.oct || 5; this.async = !!opts.async;
+    this.canvas = canvas; this.progs = {}; this.tex = null; this.texSrc = null; this.lost = false; this.oct = opts.oct || 5; this.async = !!opts.async; this.react = !!opts.react;
     const o = { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: opts.power || 'low-power', preserveDrawingBuffer: !!opts.preserve };
     let gl = null; try { gl = canvas.getContext('webgl', o) || canvas.getContext('experimental-webgl', o); } catch (e) {}
     this.gl = gl; if (!gl) return;
@@ -967,7 +1036,7 @@ class Stage {
     const gl = this.gl; let p = this.progs[id];
     if (p === undefined) {
       const mk = (t, src) => { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); return o; };
-      const h = gl.createProgram(), vs = mk(gl.VERTEX_SHADER, VERT), fs = mk(gl.FRAGMENT_SHADER, '#define OCT ' + this.oct + '\n' + COMMON + FX[id].src + MAIN);
+      const h = gl.createProgram(), vs = mk(gl.VERTEX_SHADER, VERT), fs = mk(gl.FRAGMENT_SHADER, '#define OCT ' + this.oct + '\n' + COMMON + FX[id].src + (this.react ? MAIN_REACT : MAIN));
       gl.attachShader(h, vs); gl.attachShader(h, fs); gl.bindAttribLocation(h, 0, 'a'); gl.linkProgram(h);
       if (this.par) gl.flush();                                 /* hands the compile to the GPU process right away */
       p = this.progs[id] = { h, vs, fs, u: null };
@@ -1004,6 +1073,10 @@ class Stage {
       gl.bindTexture(gl.TEXTURE_2D, this.tex); gl.uniform1f(u.u_imgOn, 1); gl.uniform1f(u.u_imgAspect, cfg.image.width / cfg.image.height);
     } else { gl.bindTexture(gl.TEXTURE_2D, this.blank); gl.uniform1f(u.u_imgOn, 0); gl.uniform1f(u.u_imgAspect, 1); }
     gl.uniform1i(u.u_img, 0);
+    if (this.react) {                                             /* what a drum hit does to the picture; at rest these change nothing */
+      gl.uniform1f(u.u_zoom, cfg.rz || 0); gl.uniform1f(u.u_gain, cfg.rg == null ? 1 : cfg.rg); gl.uniform1f(u.u_flash, cfg.rf || 0); gl.uniform1f(u.u_hue, cfg.rh || 0);
+      gl.uniform2f(u.u_shift, cfg.rsx || 0, cfg.rsy || 0); gl.uniform3f(u.u_ring, cfg.rrR || 0, cfg.rrA || 0, 34);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     return true;
   }
@@ -2211,78 +2284,128 @@ const guarded = fn => () => { if (locked()) { status('Buy this template to downl
 $('#xLV').onclick = guarded(exportLively); $('#xImg').onclick = guarded(exportImage); $('#xWE').onclick = guarded(exportWE); $('#xVid').onclick = guarded(exportVideo); $('#xDS').onclick = guarded(exportDS);
 
 /* ================= sound ================= */
-/* Lets the show move with music. The source is the microphone (the room) or a song file that the page plays itself.
-   Three smoothed values come out, each from 0 to 1: kick (a soft pulse on a bass hit), level (how loud it is overall)
-   and air (the highs). Loudness is measured against the recent peak, so a quiet room and a loud club both use the whole range.
-   Everything is eased, and the picture changes by a fifth at most, so it swells with the music and never strobes. */
-/* How hard the picture answers the music. sL/sK: extra speed from loudness and from a bass hit; zL/zK: zoom; iK: light on a hit;
-   g: grain from the highs; up/down: how fast a hit rises and dies away. Soft swells, Hard pumps, Wild lunges forward on every hit.
-   The force goes into motion: the light on a hit stays close to a quarter in every setting, so even Wild does not strobe. */
-const FORCE = [
-  { name: 'Soft', sL: 2.2, sK: 1.2, zL: .03, zK: .05, iK: .22, g: .25, up: 18, down: 3.2 },
-  { name: 'Hard', sL: 5, sK: 7, zL: .05, zK: .13, iK: .26, g: .4, up: 28, down: 4.5 },
-  { name: 'Wild', sL: 12, sK: 22, zL: .08, zK: .28, iK: .28, g: .6, up: 40, down: 5.5 },
-];
-const REACT_KEY = 'dreamscreen.react';
+/* Lets the show move with music. The source is the microphone (the room), a song file that the page plays itself, or the
+   computer's own sound. Every frame this gives:
+     kick   a pulse from 0 to 1 that jumps up on every drum hit and dies away in a fraction of a second
+     light  the same pulse, but it fires at most three times a second: it drives the flare and the color swing, so those
+            never turn into a strobe, however fast the drums are. Movement (zoom, shake, speed) answers every hit.
+     level  how full the music is overall;  air: its highs
+   A hit is found by its onset, not by loudness. Real songs are loud all the time and the bass never goes quiet between the
+   drums, so "the bass is louder than a moment ago" almost never happens. Instead every frequency is compared with the frame
+   before: a drum makes the low end rise and, with its crack, makes a great many higher frequencies jump at the same moment;
+   a held note or a pad does neither. That measure is compared with its own running median, and all of it is measured
+   against the loudest frequency of the last moments, so it behaves the same at any volume. */
+/* How hard each part of the picture answers a hit, 0 to 1. The Tune panel's faders set these; the presets are starting points. */
+const TUNE_KEY = 'dreamscreen.tune', TUNE_KEYS = ['zoom', 'light', 'color', 'shake', 'speed'];
+const TUNE_INFO = { zoom: ['Zoom', 'Zoom: how far the picture punches toward you on a hit'], light: ['Light', 'Light: how much the picture flares on a hit'],
+  color: ['Color', 'Color: how far the colors swing on a hit'], shake: ['Shake', 'Shake: how hard the picture jolts and ripples on a hit'],
+  speed: ['Speed', 'Speed: how far the motion lunges forward on a hit'] };
+const PRESETS = [{ name: 'Soft', v: [.3, .25, 0, 0, .3] }, { name: 'Hard', v: [.6, .5, .4, .45, .6] }, { name: 'Wild', v: [1, .85, .85, 1, 1] }];
+const tune = {}; TUNE_KEYS.forEach((k, i) => { tune[k] = PRESETS[1].v[i]; });
+(() => { const v = store.get(TUNE_KEY, null); if (v && typeof v === 'object') TUNE_KEYS.forEach(k => { const n = +v[k]; if (n >= 0 && n <= 1) tune[k] = n; }); })();
 const sound = {
-  ctx: null, an: null, bins: null, src: null, stream: null, el: null, elNode: null, url: '', mode: '', force: 0,
-  kick: 0, level: 0, air: 0, peak: .06, bassAvg: 0,
+  ctx: null, an: null, db: null, prev: null, ring: [], rt: [], ri: 0, ht: [], hv: [], src: null, stream: null, el: null, elNode: null, url: '', mode: '',
+  kick: 0, light: 0, level: 0, air: 0, beats: 0, amp: 0, since: 9, ratio: 1, sign: 1, dx: 1, dy: 0, ref: -110, peak: .1, clock: 0, lastLight: -9, quiet: 0, warned: false, timer: 0, tLast: 0, gen: 0,
   ensure() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('no audio');
-      this.ctx = new AC(); this.an = this.ctx.createAnalyser(); this.an.fftSize = 2048; this.an.smoothingTimeConstant = .7;
-      this.bins = new Uint8Array(this.an.frequencyBinCount);
+      this.ctx = new AC(); this.an = this.ctx.createAnalyser(); this.an.fftSize = 2048; this.an.smoothingTimeConstant = 0;
+      const n = this.an.frequencyBinCount; this.db = new Float32Array(n);
+      for (let i = 0; i < 6; i++) { this.ring.push(new Float32Array(n)); this.rt.push(-1); }       /* the last few frames, to compare against */
+      this.prev = this.ring[0];
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   },
+  /* The listening runs on its own clock, a hundred times a second, and not with the picture: a large screen on a weak
+     graphics chip may draw far fewer frames, and a beat that falls between two frames must still be heard on time. */
+  run() {
+    if (this.timer || reduced) return; this.tLast = performance.now();
+    this.timer = setInterval(() => { const now = performance.now(), dt = Math.min(.1, (now - this.tLast) / 1000); this.tLast = now; this.tick(dt); }, 10);
+  },
   /* the microphone is only listened to: it is never sent to the speakers and never leaves the page */
   async mic() {
-    this.stop(); this.ensure();
+    this.stop(); this.ensure(); const g = this.gen;
     const st = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-    this.stream = st; this.src = this.ctx.createMediaStreamSource(st); this.src.connect(this.an); this.mode = 'mic';
+    if (g !== this.gen) { st.getTracks().forEach(t => t.stop()); return; }       /* the show was closed or another source chosen while the browser was asking */
+    this.stream = st; this.src = this.ctx.createMediaStreamSource(st); this.src.connect(this.an); this.mode = 'mic'; this.run();
   },
-  /* the computer's own sound: the browser asks which screen or tab to share and whether to include its audio.
-     Only the audio is used, it is not played again and it never leaves the page. */
+  /* The computer's own sound. A browser cannot listen to one app such as Spotify on its own: it offers sound together with
+     the whole screen (everything the computer plays) or with a browser tab. So the dialog opens on the whole screen, and a
+     window is offered the system's sound too where the browser supports that. Only the audio is used, it is not played
+     again and it never leaves the page. */
   async pc() {
-    this.stop(); this.ensure();
-    const opt = { video: { frameRate: 1 }, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
-      systemAudio: 'include', selfBrowserSurface: 'exclude' };
+    this.stop(); this.ensure(); const g = this.gen;
+    const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false };
+    const opt = { video: { displaySurface: 'monitor', frameRate: 1 }, audio, systemAudio: 'include', windowAudio: 'system', monitorTypeSurfaces: 'include', selfBrowserSurface: 'exclude' };
     /* keep this tab in front when another tab is the one being shared */
     if (window.CaptureController) { try { const cc = new CaptureController(); cc.setFocusBehavior('no-focus-change'); opt.controller = cc; } catch (e) {} }
-    const st = await navigator.mediaDevices.getDisplayMedia(opt), tracks = st.getAudioTracks();
+    let st;
+    try { st = await navigator.mediaDevices.getDisplayMedia(opt); }
+    catch (e) {                                                   /* a browser that does not know the newer hints: ask the plain way */
+      if (!(e instanceof TypeError)) throw e;
+      st = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 1 }, audio, systemAudio: 'include' });
+    }
+    if (g !== this.gen) { st.getTracks().forEach(t => t.stop()); return; }
+    const tracks = st.getAudioTracks();
     if (!tracks.length) { st.getTracks().forEach(t => t.stop()); const e = new Error('no audio'); e.silent = true; throw e; }
-    this.stream = st; this.src = this.ctx.createMediaStreamSource(new MediaStream(tracks)); this.src.connect(this.an); this.mode = 'pc';
+    this.stream = st; this.src = this.ctx.createMediaStreamSource(new MediaStream(tracks)); this.src.connect(this.an); this.mode = 'pc'; this.run();
     tracks[0].addEventListener('ended', () => { if (this.stream === st) { this.stop(); soundSync(); } });      /* sharing was stopped from the browser's own bar */
   },
   file(f) {
     this.stop(); this.ensure();
     if (!this.el) { this.el = new Audio(); this.el.loop = true; this.elNode = this.ctx.createMediaElementSource(this.el); }
     this.url = URL.createObjectURL(f); this.el.src = this.url;
-    this.elNode.connect(this.an); this.an.connect(this.ctx.destination); this.mode = 'song';
+    this.elNode.connect(this.an); this.an.connect(this.ctx.destination); this.mode = 'song'; this.run();
     return this.el.play();
   },
   stop() {
+    this.gen++; clearInterval(this.timer); this.timer = 0;
     if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
     if (this.src) { try { this.src.disconnect(); } catch (e) {} this.src = null; }
     if (this.el && this.mode === 'song') {
       this.el.pause(); try { this.elNode.disconnect(); this.an.disconnect(); } catch (e) {}
       this.el.removeAttribute('src'); if (this.url) { URL.revokeObjectURL(this.url); this.url = ''; }
     }
-    this.mode = ''; this.kick = this.level = this.air = 0; this.peak = .06; this.bassAvg = 0;
+    this.mode = ''; this.kick = this.light = this.level = this.air = this.amp = 0; this.since = 9; this.ref = -110; this.peak = .1;
+    this.ht.length = this.hv.length = 0; this.quiet = 0; this.warned = false; this.ratio = 1; this.rt.fill(-1); this.ring.forEach(r => r.fill(0));
   },
   tick(dt) {
     if (!this.mode) return;
-    this.an.getByteFrequencyData(this.bins);
-    const hz = this.ctx.sampleRate / this.an.fftSize, last = this.bins.length - 1;
-    const band = (a, b) => { let sum = 0, n = 0; for (let i = Math.max(1, Math.round(a / hz)); i <= Math.min(last, Math.round(b / hz)); i++) { sum += this.bins[i]; n++; } return n ? sum / n / 255 : 0; };
-    const bass = band(30, 160), mid = band(160, 2500), high = band(2500, 9000), all = bass * .5 + mid * .35 + high * .15;
-    this.peak = Math.max(all, this.peak - dt * .03, .06);            /* rises at once, falls slowly, has a floor so silence stays still */
-    const k = 1 / this.peak, ease = (cur, to, up, down) => cur + (to - cur) * Math.min(1, dt * (to > cur ? up : down));
-    this.level = ease(this.level, Math.min(1, all * k), 6, 1.5);
-    this.air = ease(this.air, Math.min(1, high * k * 1.6), 10, 3);
-    this.bassAvg += (bass - this.bassAvg) * Math.min(1, dt * 2.5);
-    const hit = bass > this.bassAvg * 1.25 + .02 ? Math.min(1, (bass - this.bassAvg) * k * 3) : 0;   /* bass clearly above its own average */
-    const f = FORCE[this.force]; this.kick = ease(this.kick, hit, f.up, f.down);
+    this.clock += dt; this.since += dt;
+    this.kick *= Math.exp(-dt * 7); this.light *= Math.exp(-dt * 5.5);
+    const db = this.db; this.an.getFloatFrequencyData(db);
+    const hz = this.ctx.sampleRate / this.an.fftSize, last = db.length - 1, at = f => Math.min(last, Math.max(1, Math.round(f / hz)));
+    const i0 = at(30), i1 = at(180), i2 = at(5000), i3 = at(12000);
+    let top = -200; for (let i = i0; i <= i2; i++) if (db[i] > top) top = db[i];
+    this.ref = Math.max(top, this.ref - 6 * dt, -110);          /* the loudest frequency lately; everything is measured against it */
+    this.quiet = top > -80 ? 0 : this.quiet + dt;
+    const floor = this.ref - 60, R = this.ring, rt = this.rt, n = R.length, cur = R[this.ri];
+    /* the frame to compare with: the newest one that is at least 28 ms old, so the measure does not depend on the tick rate */
+    let old = null; for (let k = 1; k < n; k++) { const j = (this.ri - k + n) % n; if (rt[j] < 0) break; old = R[j]; if (this.clock - rt[j] >= .028) break; }
+    let lo = 0, jump = 0, body = 0, high = 0;
+    for (let i = i0; i <= i3; i++) {
+      const v = db[i] > floor ? (db[i] - floor) / 60 : 0, d = old ? v - old[i] : 0; cur[i] = v;
+      if (i <= i1) { if (d > 0) lo += d; } else if (i <= i2 && d > .0667) jump++;       /* the low end rising; higher frequencies that jumped by 4 dB or more */
+      if (i <= i2) body += v; else high += v;
+    }
+    rt[this.ri] = this.clock; this.prev = cur; this.ri = (this.ri + 1) % n;
+    lo /= i1 - i0 + 1; jump /= Math.max(1, i2 - i1); body /= i2 - i0 + 1; high /= Math.max(1, i3 - i2);
+    const nov = 5 * lo + jump, ht = this.ht, hv = this.hv; ht.push(this.clock); hv.push(nov);
+    while (this.clock - ht[0] > 1.2) { ht.shift(); hv.shift(); }
+    const sorted = hv.slice().sort((a, b) => a - b), thr = sorted[sorted.length >> 1] * 2.5 + .1, ratio = nov / thr;
+    /* a hit: clearly above the usual, and not right on top of the last one, unless it is plainly the stronger of the two
+       (a kick that follows a hi-hat by a sixteenth must not be swallowed by it) */
+    if (this.clock - ht[0] > .5 && top > -80 && ratio > 1 && (this.since > .15 || (this.since > .06 && ratio > this.ratio * 1.25))) {
+      const amp = Math.min(1, .4 + (ratio - 1) * 1.2), a = Math.random() * 6.2832;       /* a clear hit lands in full, a faint one at under half */
+      this.beats++; this.amp = amp; this.ratio = ratio; this.since = 0; this.dx = Math.cos(a); this.dy = Math.sin(a);
+      this.kick = Math.max(this.kick, amp);
+      if (this.clock - this.lastLight >= .34) { this.light = Math.max(this.light, amp); this.lastLight = this.clock; this.sign = -this.sign; }
+    }
+    const ease = (cur, to, up, down) => cur + (to - cur) * Math.min(1, dt * (to > cur ? up : down));
+    if (top <= -80) body = high = 0;                              /* near silence: a quiet room must not read as full music */
+    this.peak = Math.max(body, this.peak - dt * .03, .1);
+    this.level = ease(this.level, Math.min(1, body / this.peak), 6, 1.5);
+    this.air = ease(this.air, Math.min(1, high * 2.2), 10, 3);
   },
 };
 
@@ -2298,12 +2421,13 @@ const show = {
   start() {
     if (this.open) return;
     if (pseudoFull) setPseudo(false);
-    if (!this.stage) this.stage = new Stage(this.cv, { async: true, power: 'default' });
+    if (!this.stage) this.stage = new Stage(this.cv, { async: true, power: 'default', react: true });
     const b = baseItem(), at = b ? ITEMS.indexOf(b) : -1;
     /* an untouched Studio holds the stock design, which looks like the first catalogue wallpaper, so it is left out */
     const stock = !b && S.fx === DEF.fx && S.pal === DEF.pal && S.seed === DEF.seed && !studioImage;
     this.list = stock ? [] : [sCfg()];
     for (let k = 1; k <= ITEMS.length; k++) { const it = ITEMS[(at + k + ITEMS.length) % ITEMS.length]; if (it !== b) this.list.push(itemCfg(it)); }
+    this.list.forEach(c => { c.colors = c.colors.slice(); });       /* the Tune panel may recolor a wallpaper; the catalogue and the Studio keep theirs */
     this.i = 0; this.phase = studio.phase; this.t = 0; this.acc = 1; this.pending = false; this.painted = false; this.native = false;
     const saved = store.get(SHOW_KEY, null); this.step = Number.isInteger(saved) && SHOW_STEPS[saved] ? saved : 1; this.label();
     this.fade.style.transition = 'none'; this.fade.style.opacity = '0';
@@ -2320,7 +2444,7 @@ const show = {
     this.open = false; this.el.hidden = true; document.body.classList.remove('show-on'); clearTimeout(this.idleT);
     if ((document.fullscreenElement || document.webkitFullscreenElement) === this.el) { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {} }
     if (this.lock) { try { this.lock.release(); } catch (e) {} this.lock = null; }
-    sound.stop(); soundSync(); showMsg('');
+    sound.stop(); soundSync(); showMsg(''); tuneOpen(false);
     bgDirty = true; studio.dirty = true;
   },
   /* keeps the screen from going to sleep while the show runs, where the browser allows it */
@@ -2332,7 +2456,7 @@ const show = {
     }).catch(() => {});
   },
   /* the controls fade away after a moment and come back on a tap or a mouse move */
-  wake() { clearTimeout(this.idleT); this.el.classList.remove('idle'); if (this.open) this.idleT = setTimeout(() => this.el.classList.add('idle'), 2600); },
+  wake() { clearTimeout(this.idleT); this.el.classList.remove('idle'); if (this.open && tuneEl.hidden) this.idleT = setTimeout(() => this.el.classList.add('idle'), 2600); },
   label() {
     const st = SHOW_STEPS[this.step], b = $('#shTime'); b.textContent = st[1];
     b.setAttribute('aria-label', st[0] ? 'Changes every ' + st[1] + '. Press to change.' : 'Stays on this wallpaper. Press to change.');
@@ -2347,23 +2471,30 @@ const show = {
     }
     this.i = (this.i + d + this.list.length) % this.list.length; this.t = 0; this.acc = 1; this.painted = false;
     const L = this.list[this.i].loop || LOOP; this.phase = ((this.phase % L) + L) % L;
-    this.warm();
+    this.warm(); if (!tuneEl.hidden) tuneSync();
   },
-  /* with music on, the wallpaper is drawn a little brighter, closer and grainier as the sound asks */
+  /* With music on, every hit does five things to the picture, each as far as its fader in the Tune panel says:
+     it punches toward the viewer, flares, swings its colors, jolts with a ripple running outward, and lunges forward. */
   cur() {
     const c = this.list[this.i]; if (!c || !sound.mode || reduced) return c;
-    const o = Object.assign(this.live, c), f = FORCE[sound.force];
-    o.intensity = c.intensity * (.86 + .14 * sound.level + f.iK * sound.kick);
-    o.scale = c.scale * (1 + f.zL * sound.level + f.zK * sound.kick);
-    o.grain = Math.min(1, c.grain + f.g * sound.air);
+    const o = Object.assign(this.live, c), k = sound.kick, t = sound.since, jolt = tune.shake * sound.amp;
+    o.rz = tune.zoom * (.62 * k + .05 * sound.level);
+    o.rg = 1 - .18 * tune.light + tune.light * sound.light;       /* a touch darker between hits, so the flare has somewhere to go */
+    o.rf = tune.light * .16 * sound.light;
+    o.rh = tune.color * 1.9 * sound.sign * Math.pow(sound.light, .7);
+    const j = jolt * .055 * Math.exp(-7 * t) * Math.cos(34 * t); o.rsx = sound.dx * j; o.rsy = sound.dy * j;
+    o.rrR = t * 2.4; o.rrA = jolt * .1 * Math.exp(-3.2 * t);
+    o.intensity = c.intensity * (.9 + .1 * sound.level);
+    o.grain = Math.min(1, c.grain + .35 * sound.air);
     return o;
   },
   tick(dt) {
     const c = this.list[this.i]; if (!c) return;
     if (!reduced) {
-      sound.tick(dt);
-      const f = FORCE[sound.force], push = sound.mode ? 1 + f.sL * sound.level + f.sK * sound.kick : 1;     /* louder music, faster drift; a hit throws it forward */
+      const push = sound.mode ? 1 + tune.speed * (2.5 * sound.level + 16 * sound.kick) : 1;     /* fuller music, faster drift; a hit throws it forward */
       this.phase = (this.phase + dt * c.speed * push) % (c.loop || LOOP);
+      if (sound.mode === 'pc' && sound.quiet > 6 && !sound.warned) { sound.warned = true; showMsg('No sound is arriving. Start the music, or share again: Entire screen with \u201cAlso share system audio\u201d, or the browser tab that is playing.'); }
+      if (!tuneEl.hidden) tuneMeter(dt);
       const every = SHOW_STEPS[this.step][0];
       if (every) { this.t += dt; if (this.t >= every) { this.go(1); return; } }
     }
@@ -2382,31 +2513,106 @@ const shMsg = $('#shMsg'); let shMsgT = 0;
 function showMsg(t) { shMsg.textContent = t; clearTimeout(shMsgT); if (t) shMsgT = setTimeout(() => { shMsg.textContent = ''; }, 6000); }
 function soundSync() {
   $('#shMic').setAttribute('aria-pressed', String(sound.mode === 'mic')); $('#shSong').setAttribute('aria-pressed', String(sound.mode === 'song'));
-  $('#shPc').setAttribute('aria-pressed', String(sound.mode === 'pc'));
-  const f = $('#shForce'); f.hidden = !sound.mode; f.textContent = FORCE[sound.force].name; f.setAttribute('aria-label', 'Reaction: ' + FORCE[sound.force].name + '. Press to change.');
+  $('#shPc').setAttribute('aria-pressed', String(sound.mode === 'pc')); $('#tnHint').hidden = !!sound.mode && !reduced;
 }
-(() => { const v = store.get(REACT_KEY, 0); if (Number.isInteger(v) && FORCE[v]) sound.force = v; })();
+/* ---- the Tune panel ---- */
+const tuneEl = $('#tune'), tnMeter = $('#tnMeter'), faders = {}, meterV = new Float32Array(28);
+function tuneSync() {
+  TUNE_KEYS.forEach(k => { const f = faders[k], pc = Math.round(tune[k] * 100); f.style.setProperty('--p', tune[k].toFixed(2)); f.setAttribute('aria-valuenow', pc); f.setAttribute('aria-valuetext', pc + ' %'); });
+  const pi = PRESETS.findIndex(p => TUNE_KEYS.every((k, i) => Math.abs(tune[k] - p.v[i]) < .005));
+  [...$('#tnPre').children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === pi)));
+  const hint = $('#tnHint'); hint.hidden = !!sound.mode && !reduced;
+  if (reduced) hint.textContent = 'Your system asks for reduced motion, so the picture stays calm and does not react to music.';
+  const c = show.list[show.i]; if (!c) return;
+  const key = c.colors.join();
+  [...$('#tnFx').children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.fx === c.fx)));
+  [...$('#tnPal').children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.c === key)));
+  [0, 1, 2, 3].forEach(i => { $('#tnC' + i).value = c.colors[i]; });
+  [1, 2, 3].forEach(i => tuneEl.style.setProperty('--w' + i, c.colors[i]));          /* the faders glow in the wallpaper's colors */
+}
+function tuneOpen(on) {
+  tuneEl.hidden = !on; show.el.classList.toggle('tuning', on);
+  const b = $('#shTune'); b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-expanded', String(on));
+  if (on) tuneSync(); else if (tuneEl.contains(document.activeElement)) b.focus();
+  show.wake();
+}
+/* the music's spectrum behind the faders, low notes on the left: it shows at a glance that sound is arriving */
+function tuneMeter(dt) {
+  const x = tnMeter.getContext('2d'); if (!x) return; const w = tnMeter.width, h = tnMeter.height, n = meterV.length, c = show.list[show.i];
+  x.clearRect(0, 0, w, h); if (!sound.mode || !sound.prev || !c) return;
+  const hz = sound.ctx.sampleRate / sound.an.fftSize, last = sound.prev.length - 1, bw = w / n; x.fillStyle = c.colors[2];
+  for (let j = 0; j < n; j++) {
+    const a = Math.max(1, Math.round(40 * Math.pow(250, j / n) / hz)), b = Math.min(last, Math.max(a, Math.round(40 * Math.pow(250, (j + 1) / n) / hz) - 1));
+    let m = 0; for (let i = a; i <= b; i++) if (sound.prev[i] > m) m = sound.prev[i];
+    meterV[j] = Math.max(Math.min(1, m), meterV[j] - dt * 1.6);
+    const bh = Math.max(1, meterV[j] * h); x.fillRect(j * bw + 1.5, h - bh, bw - 3, bh);
+  }
+}
+/* the wallpaper on screen was reshaped by hand, so the show stays on it */
+const tuneHold = () => { if (SHOW_STEPS[show.step][0]) { show.step = SHOW_STEPS.length - 1; show.t = 0; show.label(); } };
+const tuneCfg = () => show.list[show.i];
+TUNE_KEYS.forEach(k => {
+  const w = el('div', 'fd'), t = el('div', 'fd-t'); t.id = 'tn-' + k; t.tabIndex = 0;
+  t.setAttribute('role', 'slider'); t.setAttribute('aria-orientation', 'vertical'); t.setAttribute('aria-valuemin', '0'); t.setAttribute('aria-valuemax', '100'); t.setAttribute('aria-label', TUNE_INFO[k][1]);
+  const set = v => { tune[k] = Math.round(Math.min(1, Math.max(0, v)) * 100) / 100; store.set(TUNE_KEY, tune); tuneSync(); };
+  const fromY = e => { const r = t.getBoundingClientRect(); set(1 - (e.clientY - r.top - 12) / (r.height - 24)); };
+  t.addEventListener('pointerdown', e => { e.preventDefault(); t.focus(); try { t.setPointerCapture(e.pointerId); } catch (err) {} fromY(e); });
+  t.addEventListener('pointermove', e => { if (t.hasPointerCapture && t.hasPointerCapture(e.pointerId)) fromY(e); });
+  t.addEventListener('keydown', e => {
+    const d = { ArrowUp: .05, ArrowRight: .05, ArrowDown: -.05, ArrowLeft: -.05, PageUp: .2, PageDown: -.2 }[e.key];
+    if (d) set(tune[k] + d); else if (e.key === 'Home') set(0); else if (e.key === 'End') set(1); else return;
+    e.preventDefault(); e.stopPropagation();                      /* the arrow keys move the fader here, not the show */
+  });
+  w.append(t, el('span', '', TUNE_INFO[k][0])); $('#tnEq').append(w); faders[k] = t;
+});
+PRESETS.forEach(p => {
+  const b = el('button', '', p.name); b.type = 'button';
+  b.onclick = () => { TUNE_KEYS.forEach((k, i) => { tune[k] = p.v[i]; }); store.set(TUNE_KEY, tune); tuneSync(); };
+  $('#tnPre').append(b);
+});
+FX_IDS.forEach(id => {
+  const b = el('button', '', FX[id].name); b.type = 'button'; b.dataset.fx = id;
+  b.onclick = () => { const c = tuneCfg(); if (!c) return; c.fx = id; tuneHold(); tuneSync(); };
+  $('#tnFx').append(b);
+});
+PAL.forEach(p => {
+  const b = el('button', 'pal'); b.type = 'button'; b.dataset.c = p.c.join(); b.title = p.name; b.setAttribute('aria-label', p.name + ' colors');
+  b.style.background = 'linear-gradient(90deg,' + p.c.join(',') + ')';
+  b.onclick = () => { const c = tuneCfg(); if (!c) return; c.colors = p.c.slice(); tuneHold(); tuneSync(); };
+  $('#tnPal').append(b);
+});
+[0, 1, 2, 3].forEach(i => {
+  const inp = $('#tnC' + i);
+  inp.addEventListener('input', e => { const c = tuneCfg(); if (!c) return; c.colors[i] = e.target.value; tuneHold(); tuneSync(); });
+  inp.addEventListener('click', () => { show.picking = true; });          /* a color dialog can end full screen; that must not end the show */
+  ['change', 'blur'].forEach(n => inp.addEventListener(n, () => { show.picking = false; }));
+});
+$('#shTune').onclick = () => tuneOpen(tuneEl.hidden);
+$('#tnPrev').onclick = () => show.go(-1);
+$('#tnNext').onclick = () => show.go(1);
 /* sharing the computer's sound exists in desktop browsers only; phones do not offer it */
 $('#shPc').hidden = !(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 $('#shPc').onclick = async () => {
   show.wake();
   if (sound.mode === 'pc') { sound.stop(); soundSync(); return; }
   const t0 = performance.now(); show.picking = true;          /* the browser's dialog can end full screen; that must not end the show */
+  showMsg('In the dialog choose Entire screen and switch on \u201cAlso share system audio\u201d. A browser tab with its audio works too.');
   try { await sound.pc(); showMsg(''); }
   catch (e) {
     sound.stop();
     /* refused at once: the browser does not allow it here. Refused later: the person closed the dialog, which needs no message. */
-    showMsg(e && e.silent ? 'No sound came with it. Share again and switch on the audio in the dialog.' : performance.now() - t0 < 400 ? 'The computer\u2019s sound cannot be shared here.' : '');
+    showMsg(e && e.silent ? 'No sound came with it. Share again: choose Entire screen and switch on \u201cAlso share system audio\u201d, or pick a browser tab with its audio.' : performance.now() - t0 < 400 ? 'The computer\u2019s sound cannot be shared here.' : '');
   }
   show.picking = false; soundSync();
   if (sound.mode === 'pc' && !(document.fullscreenElement || document.webkitFullscreenElement)) show.goFull();
 };
-$('#shForce').onclick = () => { sound.force = (sound.force + 1) % FORCE.length; store.set(REACT_KEY, sound.force); soundSync(); show.wake(); };
 $('#shMic').onclick = async () => {
   show.wake();
   if (sound.mode === 'mic') { sound.stop(); soundSync(); return; }
+  show.picking = true;                                      /* some browsers leave full screen to ask for the microphone; that must not end the show */
   try { await sound.mic(); showMsg(''); } catch (e) { sound.stop(); showMsg('The microphone is not available here. Choose a song instead.'); }
-  soundSync();
+  show.picking = false; soundSync();
+  if (sound.mode === 'mic' && show.open && !(document.fullscreenElement || document.webkitFullscreenElement)) show.goFull();
 };
 $('#shSong').onclick = () => {
   show.wake();
@@ -2428,7 +2634,7 @@ show.el.addEventListener('pointerdown', () => show.wake(), true);
 show.el.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') show.wake(); });
 (() => {   /* a sideways swipe changes the wallpaper */
   let x0 = null, y0 = 0;
-  show.el.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' || e.target.closest('button')) { x0 = null; return; } x0 = e.clientX; y0 = e.clientY; });
+  show.el.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' || e.target.closest('button,.tune')) { x0 = null; return; } x0 = e.clientX; y0 = e.clientY; });
   show.el.addEventListener('pointerup', e => {
     if (x0 == null) return; const dx = e.clientX - x0, dy = e.clientY - y0; x0 = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.2) show.go(dx < 0 ? 1 : -1);
@@ -2436,12 +2642,14 @@ show.el.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') sh
 })();
 document.addEventListener('keydown', e => {
   if (!show.open) return;
-  if (e.key === 'Escape') show.close(); else if (e.key === 'ArrowRight') { show.go(1); show.wake(); } else if (e.key === 'ArrowLeft') { show.go(-1); show.wake(); }
+  if (e.key === 'Escape') { if (tuneEl.hidden) show.close(); else tuneOpen(false); }
+  else if (e.target.closest && e.target.closest('.tune')) return;        /* inside the panel the arrow keys belong to its controls */
+  else if (e.key === 'ArrowRight') { show.go(1); show.wake(); } else if (e.key === 'ArrowLeft') { show.go(-1); show.wake(); }
 });
 ['fullscreenchange', 'webkitfullscreenchange'].forEach(n => document.addEventListener(n, () => {
   const on = (document.fullscreenElement || document.webkitFullscreenElement) === show.el;
   if (on) show.native = true;
-  else if (show.picking) show.native = false;                          /* the file dialog took full screen away: carry on filling the page */
+  else if (show.picking) { show.native = false; show.picking = false; }      /* a dialog took full screen away: carry on filling the page */
   else if (show.native && show.open) show.close();                     /* leaving full screen ends the show */
 }));
 document.addEventListener('visibilitychange', () => { if (show.open && document.visibilityState === 'visible') show.keepAwake(); });
@@ -2475,7 +2683,7 @@ function frame(now) {
 bgTick(0); requestAnimationFrame(frame);
 window.addEventListener('resize', () => { bgDirty = true; studio.dirty = true; });
 /* test hook: lets an automated check read state without touching the UI */
-window.__mihot = { FORCE, sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
+window.__mihot = { tune, PRESETS, tuneOpen, sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
 })();
 </script>
 </body>

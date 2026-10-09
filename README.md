@@ -16,9 +16,9 @@ The whole site is one file, `index.html`. There is nothing to build or install.
 - **Show** – the wallpapers as a full-screen projection for a wall, a TV or a screen behind a band. They cross-fade every 30 s, 1 min or 5 min, or hold on one. The picture can move with music from three sources:
   - **Mic** – the sound in the room.
   - **Song** – a music file the page plays itself.
-  - **Computer** – whatever the computer is playing, from a browser tab or an app such as Spotify. The browser asks which screen or tab to share; switch on its audio in that dialog. Desktop Chrome and Edge only.
+  - **Computer** – whatever the computer is playing, Spotify included. A browser cannot listen to one app by itself, so in the dialog choose **Entire screen** and switch on **Also share system audio**. A browser tab with its audio works too. Desktop Chrome and Edge only.
 
-  Once a source is on, a fourth button sets how hard the picture reacts: **Soft**, **Hard** or **Wild**.
+  Every drum hit punches the picture toward you, makes it flare, swings its colors, jolts it and throws the motion forward. **Tune** opens a small mixing desk for that: five faders (Zoom, Light, Color, Shake, Speed) with the presets **Soft**, **Hard** and **Wild**, the music's spectrum behind them, and below them the effect and the colors of the wallpaper on screen.
 
 ## Run it
 
@@ -35,6 +35,8 @@ The page needs an internet connection for its two typefaces (Google Fonts) and f
 
 - The wallpapers need WebGL. Without it the page shows plain gradients in each wallpaper's colors.
 - **Mic** and **Computer** need a secure address (`https://`), which GitHub Pages provides, and the browser asks for permission. The sound is only analysed in the page; nothing is recorded or sent anywhere.
+- High Tune settings flash. The flare and the color swing fire at most three times a second, and the show stays still for anyone whose system asks for reduced motion, but keep the faders low around people sensitive to flashing light.
+- The beat detection was tuned on synthetic test tracks (house, hip-hop, drum and bass, a quiet mix, an ambient pad), not yet on a library of real songs.
 - Everything is free at the moment. The store (prices, cart, locked downloads) is still in the code behind one switch: set `const FREE = true;` to `false` in `index.html`.
 - The **Dreamscreen Player** download makes a `.dreamscreen` file for a player app that does not exist yet.
 - The Lively package was built from Lively's documentation and source and checked in a test browser, not yet in Lively itself.
