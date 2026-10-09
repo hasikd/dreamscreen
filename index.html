@@ -1,0 +1,2435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dreamscreen</title>
+<meta name="description" content="Dreamy live wallpapers you can shape in the browser, run on your desktop, or project full screen and let move with music.">
+<meta name="theme-color" content="#08060b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='.35' cy='.3' r='.9'%3E%3Cstop offset='0' stop-color='%23fff0d8'/%3E%3Cstop offset='.35' stop-color='%23ff7a3d'/%3E%3Cstop offset='.7' stop-color='%237a1e5e'/%3E%3Cstop offset='1' stop-color='%2308060b'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3C/svg%3E">
+<style>
+/* base reset the page was built on */
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;padding:0}
+img{max-width:100%}
+[hidden]:not([hidden=until-found i]){display:none!important}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Dots&family=Onest:wght@300;400;500&display=swap">
+<style>
+/* Layout: one dark, grainy field of drifting light that never changes between views.
+   The first screen is only that field and the name. Wallpapers dissolve out of it as you scroll,
+   with feathered edges, so they read as part of the same space. Glass panes for everything functional. */
+:root{
+  --bg:#08060b; --panel:#130c13;
+  --surface:rgba(255,236,224,.06); --raised:rgba(255,236,224,.12); --line:rgba(255,226,210,.15);
+  --fg:#f6ede7; --muted:rgba(246,237,231,.64);
+  --accent:#ff7a3d; --warn:#ffbe6b;
+  --shadow:rgba(0,0,0,.6); --backdrop:rgba(6,3,10,.62);
+  --screen-fg:#fff; --screen-chip:rgba(14,8,18,.5);
+  --font-logo:"Zen Dots","Orbitron","Arial Black",system-ui,sans-serif;
+  --font-body:"Onest","Segoe UI",system-ui,-apple-system,sans-serif;
+  --r-screen:26px; --r-ctl:14px;
+  --gutter:clamp(16px,3vw,36px); --bar-h:64px;
+  /* sliders take their light from the wallpaper being edited */
+  --track:rgba(255,236,224,.14); --w1:#7a1e5e; --w2:#ff7a3d; --w3:#fff0d8;
+  --ease:cubic-bezier(.22,.8,.24,1);
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:300 16px/1.6 var(--font-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+h1,h2,h3,p,dl,dd,ol,ul,figure,fieldset{margin:0;padding:0}
+fieldset{border:0;min-width:0}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--fg);outline-offset:3px;border-radius:8px}
+canvas{display:block}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* the field */
+.bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;
+  background:radial-gradient(70% 60% at 12% 18%,#5a1e52,transparent 70%),radial-gradient(60% 60% at 90% 55%,#7a2a1c,transparent 70%),radial-gradient(70% 50% at 40% 105%,#1d2a6a,transparent 70%),#08060b}
+/* static film grain over the field; a tiny tile generated once at start-up, so it costs nothing per frame */
+.grain{position:fixed;inset:0;z-index:0;pointer-events:none;background-size:160px 160px}
+.page{position:relative;z-index:1;max-width:1320px;margin-inline:auto;padding-inline:var(--gutter);padding-block:0 96px}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes fadein{from{opacity:0}}
+@keyframes fadeout{to{opacity:0}}
+@keyframes sink{to{opacity:0;transform:translateY(12px)}}
+@keyframes slidein{from{opacity:0;transform:translateX(48px)}}
+@keyframes slideout{to{opacity:0;transform:translateX(48px)}}
+/* the two views dissolve into each other */
+#viewGallery,#viewStudio{animation:fadein .9s var(--ease) backwards}
+
+/* top bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:clamp(16px,3vw,34px);min-height:var(--bar-h);padding-block:16px}
+.bar::before{content:"";position:absolute;z-index:-1;inset:0 calc(50% - 50vw);pointer-events:none;background:rgba(8,6,11,.4);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  -webkit-mask-image:linear-gradient(#000 62%,transparent);mask-image:linear-gradient(#000 62%,transparent)}
+.logo{display:block;min-width:0;white-space:nowrap;background:none;border:0;padding:4px 0;margin-right:auto;
+  font:400 1.05rem/1 var(--font-logo);letter-spacing:.04em;color:var(--fg);transition:opacity .9s var(--ease)}
+.logo i{display:none}
+body[data-view="gallery"].at-top .logo{opacity:0;pointer-events:none}
+.tabs{display:flex;gap:clamp(16px,3vw,30px)}
+.tabs button,.cart-btn{position:relative;border:0;background:none;padding:6px 0;font-weight:400;font-size:.74rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);transition:color .5s var(--ease)}
+.tabs button::after,.cart-btn::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:currentColor;transform:scaleX(0);transform-origin:left;transition:transform .7s var(--ease)}
+.tabs button:hover,.cart-btn:hover{color:var(--fg)}
+.tabs button[aria-current="page"]{color:var(--fg)}
+.tabs button[aria-current="page"]::after,.cart-btn:hover::after{transform:scaleX(1)}
+.cart-btn{display:flex;align-items:center;gap:9px}
+.cart-btn b{min-width:20px;height:20px;padding-inline:6px;display:grid;place-items:center;border-radius:999px;border:1px solid var(--line);
+  color:var(--fg);font-size:.7rem;font-weight:400;letter-spacing:0;font-variant-numeric:tabular-nums}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--surface);
+  border-radius:999px;padding:11px 24px;font-weight:400;letter-spacing:.04em;text-decoration:none;line-height:1.2;text-align:center;color:var(--fg);
+  transition:background .6s var(--ease),box-shadow .9s var(--ease),transform .6s var(--ease),color .6s}
+.btn:hover{background:var(--raised);transform:translateY(-1px)}
+.btn.primary{background:var(--fg);border-color:transparent;color:#1a0f14;font-weight:500}
+.btn.primary:hover{background:#fff;box-shadow:0 0 44px -4px color-mix(in srgb,var(--accent) 80%,transparent)}
+.btn.small{padding:7px 16px;font-size:.88rem}
+.btn[disabled]{opacity:.4;cursor:default;transform:none}
+.link,.studio-head .btn,.stage-bar .btn{background:none;border:0;backdrop-filter:none;padding:6px 2px;color:var(--muted);font-weight:300;text-decoration:underline;text-decoration-color:transparent;
+  text-underline-offset:5px;transition:color .5s,text-decoration-color .5s}
+.link:hover,.studio-head .btn:hover,.stage-bar .btn:hover{color:var(--fg);text-decoration-color:currentColor;background:none;transform:none}
+.row{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+
+/* first screen: the name and nothing else */
+.hero{position:relative;display:grid;place-items:center;min-height:calc(100svh - 64px);padding-block:8vh 12vh}
+.mark{position:relative;display:grid;margin:0;font:400 clamp(1.9rem,8.8vw,8.6rem)/1 var(--font-logo);letter-spacing:.015em;white-space:nowrap;
+  animation:mark-in 3.2s var(--ease) both;user-select:none}
+.mark span{grid-area:1/1;display:block}
+.m-base{background:linear-gradient(180deg,#ffffff 6%,#ece6ff 28%,#8c84c6 46%,#ffffff 50%,#ffd2b0 68%,#ff7f4a 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 26px rgba(255,120,70,.4)) drop-shadow(0 0 90px rgba(190,90,255,.3))}
+.m-r,.m-c{mix-blend-mode:screen;filter:blur(.7px);opacity:.55;pointer-events:none}
+.m-r{color:#ff3d6a;animation:aber-r 9s ease-in-out infinite}
+.m-c{color:#30d8ff;animation:aber-c 11s ease-in-out infinite}
+@keyframes aber-r{0%,100%{transform:translateX(-.028em)}50%{transform:translateX(-.06em)}}
+@keyframes aber-c{0%,100%{transform:translateX(.028em)}50%{transform:translateX(.06em)}}
+@keyframes mark-in{from{opacity:0;filter:blur(24px);letter-spacing:.12em}to{opacity:1;filter:none;letter-spacing:.015em}}
+.cue{position:absolute;left:50%;bottom:3.5vh;width:1px;height:56px;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.55));overflow:hidden;animation:fadein 4s 1.6s both}
+.cue::after{content:"";position:absolute;left:0;top:-16px;width:1px;height:16px;background:#fff;animation:cue 3.4s var(--ease) infinite}
+@keyframes cue{to{transform:translateY(80px)}}
+/* the name's colour fringes stop moving once it has scrolled away */
+body:not(.at-top) .m-r,body:not(.at-top) .m-c,body:not(.at-top) .cue::after{animation-play-state:paused}
+
+/* wallpapers */
+.section{padding-block:clamp(24px,5vw,72px) 0;display:grid;gap:clamp(24px,3vw,40px)}
+.section-head{display:flex;flex-wrap:wrap;gap:10px 28px;align-items:baseline;justify-content:space-between}
+h2{font:400 clamp(1.2rem,2.2vw,1.7rem)/1.2 var(--font-logo);letter-spacing:.04em}
+.count{color:var(--muted);font-size:.9rem}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(36px,5vw,72px) clamp(10px,2vw,28px);align-items:start}
+.grid .card:nth-child(3n+2){margin-top:clamp(28px,6vw,90px)}
+@media (max-width:980px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.grid .card:nth-child(3n+2){margin-top:0}.grid .card:nth-child(2n){margin-top:clamp(24px,6vw,64px)}}
+@media (max-width:600px){.grid{grid-template-columns:minmax(0,1fr)}.grid .card:nth-child(n){margin-top:0}}
+.card{display:grid;gap:6px;min-width:0;--glow:var(--accent)}
+.card-screen{position:relative;display:block;width:100%;padding:0;border:0;background:none;aspect-ratio:16/9;border-radius:14px}
+.card-screen::before{content:"";position:absolute;inset:-14% 0;background:radial-gradient(closest-side,var(--glow),transparent);opacity:.1;filter:blur(26px);transition:opacity 1.4s var(--ease);pointer-events:none}
+.card-screen canvas{position:relative;width:100%;height:100%;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 19%,#000 81%,transparent),linear-gradient(0deg,transparent,#000 22%,#000 78%,transparent);
+  -webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,transparent,#000 19%,#000 81%,transparent),linear-gradient(0deg,transparent,#000 22%,#000 78%,transparent);
+  mask-composite:intersect;
+  transition:transform 1.6s var(--ease),filter 1.2s var(--ease)}
+.card:hover .card-screen::before,.card-screen:focus-visible::before{opacity:.38}
+.card:hover .card-screen canvas,.card-screen:focus-visible canvas{transform:scale(1.045)}
+.pill{position:absolute;left:12%;top:16%;display:inline-flex;align-items:center;padding:4px 11px;border-radius:999px;
+  background:var(--screen-chip);backdrop-filter:blur(10px);color:var(--screen-fg);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;font-weight:400}
+.card-screen .pill:not(.owned){display:none}
+.pill.owned{left:auto;right:12%;border:1px solid color-mix(in srgb,var(--accent) 70%,transparent)}
+.card-top{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding-inline:15%}
+.card h3{font:400 .95rem/1.3 var(--font-logo);letter-spacing:.05em;min-width:0}
+.price{font-weight:300;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:.92rem}
+.card-bottom{display:flex;justify-content:flex-end;padding-inline:15%}
+.cat,.card-bottom .link{display:none}
+.card-bottom .btn.small{background:none;border:0;backdrop-filter:none;padding:4px 0;color:var(--muted);border-radius:0;font-size:.82rem;letter-spacing:.16em;text-transform:uppercase;
+  border-bottom:1px solid transparent;transition:color .5s,border-color .5s}
+.card-bottom .btn.small:hover{background:none;color:var(--fg);border-color:var(--fg);transform:none}
+.card-bottom .btn.small.primary{color:var(--fg);border-bottom-color:var(--accent)}
+.empty{color:var(--muted);padding-block:20px}
+@supports (animation-timeline:view()){
+  .card{animation:emerge linear both;animation-timeline:view();animation-range:entry 0% entry 70%}
+  @keyframes emerge{from{opacity:0;filter:blur(22px);transform:translateY(60px) scale(.95)}to{opacity:1;filter:none;transform:none}}
+  @media (pointer:coarse){@keyframes emerge{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}}
+}
+
+
+[hidden]{display:none!important}
+/* browsing inside an open wallpaper: arrows and a sideways swipe */
+.swipe{touch-action:pan-y}
+.slide-cv{will-change:transform,opacity}
+/* controls that live inside a wallpaper: bare glyphs with a soft shadow, no plate and no ring */
+.nav,.ic{position:absolute;z-index:2;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:none;color:var(--screen-fg);opacity:.72;
+  filter:drop-shadow(0 1px 6px rgba(0,0,0,.7));-webkit-tap-highlight-color:transparent;transition:opacity .7s var(--ease),transform .5s var(--ease),filter .5s}
+.nav:hover,.ic:hover{opacity:1}
+.nav:active,.ic:active{transform:scale(.86)}
+.nav:focus-visible,.ic:focus-visible{outline:0;opacity:1;filter:drop-shadow(0 0 7px var(--screen-fg))}
+.nav{top:50%;margin-top:-22px}
+.nav::before{content:"";width:11px;height:11px;border:solid currentColor;border-width:0 0 1.75px 1.75px;transform:translateX(3px) rotate(45deg)}
+.nav.next::before{transform:translateX(-3px) rotate(-135deg)}
+.nav.prev{left:2px}.nav.next{right:2px}
+.ic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ic .on,.ic[data-on] .off{display:none}
+.ic[data-on] .on{display:block}
+.ic.play{left:4px;bottom:2px}.ic.full{right:4px;bottom:2px}
+
+/* how it works */
+.how-wrap{padding-top:clamp(64px,10vw,140px)}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:22px clamp(24px,5vw,72px);list-style:none}
+.how li{display:grid;gap:4px;align-content:start;color:var(--muted)}
+.how b{font:400 .95rem/1.3 var(--font-logo);letter-spacing:.05em;color:var(--fg)}
+.foot{color:var(--muted);font-size:.86rem}
+
+/* dialogs */
+dialog{border:0;padding:0;background:var(--panel);color:var(--fg);max-width:none;max-height:none}
+dialog::backdrop{background:var(--backdrop);backdrop-filter:blur(10px)}
+dialog[open]{animation:rise .8s var(--ease) both}
+dialog[open]::backdrop{animation:fadein .8s ease both}
+dialog.closing{animation:sink .28s ease both}
+dialog.closing::backdrop{animation:fadeout .28s ease both}
+.detail-in:focus,.cart-in:focus{outline:0}
+.x{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);background:none;font-size:1.2rem;line-height:1;color:var(--muted);transition:color .4s,background .4s}
+.x:hover{color:var(--fg);background:var(--surface)}
+#cart{margin:0 0 0 auto;width:min(430px,100%);height:100%;border-radius:var(--r-screen) 0 0 var(--r-screen);border-left:1px solid var(--line)}
+#cart[open]{animation:slidein .7s var(--ease) both}
+#cart.closing{animation:slideout .28s ease both}
+.cart-in{display:grid;grid-template-rows:auto 1fr auto;height:100%}
+.cart-head{display:flex;align-items:center;justify-content:space-between;padding:22px 24px}
+.cart-list{overflow:auto;padding:4px 24px;display:grid;align-content:start}
+.cart-item{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:14px;align-items:center;padding-block:14px;border-bottom:1px solid var(--line)}
+.cart-item canvas{width:96px;height:54px;border-radius:10px}
+.cart-item div{display:grid;min-width:0}
+.cart-item strong{font:400 .92rem/1.3 var(--font-logo);letter-spacing:.04em}
+.cart-item small{color:var(--muted)}
+.cart-foot{padding:20px 24px calc(22px + env(safe-area-inset-bottom,0px));display:grid;gap:14px;border-top:1px solid var(--line)}
+.total{display:flex;justify-content:space-between;font-size:1.05rem;font-variant-numeric:tabular-nums}
+.note{color:var(--warn);font-size:.9rem}
+#detail{width:min(1040px,calc(100% - 32px));border-radius:var(--r-screen);overflow:hidden;margin:auto;border:1px solid var(--line);box-shadow:0 60px 140px -30px #000}
+.detail-in{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}
+.detail-screen{position:relative;aspect-ratio:16/9;align-self:center;background:#000}
+.detail-screen canvas{width:100%;height:100%}
+.detail-info{display:grid;gap:22px;align-content:center;padding:clamp(20px,3vw,34px);min-width:0}
+.detail-info h2{font-size:1.45rem}
+.detail-top{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.detail-top .price{display:block;margin-top:4px}
+@media (max-width:760px){.detail-in{grid-template-columns:1fr}}
+
+/* studio
+   Phone: the wallpaper runs edge to edge under the top bar and stays there while you edit. It is sticky inside .edit only,
+   so once you scroll past the editing controls to the downloads it leaves the screen with them.
+   Desktop: the wallpaper sits beside the controls. */
+/* --leave: the room kept below the sticky wallpaper inside .edit. It makes the wallpaper start to leave as soon as the
+   downloads come into view from below, instead of only when they reach it. The panel's matching negative margin cancels it in the flow. */
+.studio{--stage-maxh:46svh;--leave:max(0px,calc(100svh - var(--stage-maxh) - var(--bar-h) - env(safe-area-inset-top,0px)));padding-bottom:22svh}
+.stage-col{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;min-width:0;
+  margin:calc(-1 * var(--bar-h)) calc(-1 * var(--gutter)) var(--leave);padding-top:var(--bar-h);background:var(--bg)}
+.stage-col::before{content:"";position:absolute;inset:auto 0 100%;height:env(safe-area-inset-top,0px);background:inherit}
+.stage{--ar:1.7778;position:relative;width:100%;aspect-ratio:var(--ar);max-height:var(--stage-maxh);overflow:hidden;background:#000}
+/* the picture keeps the shape of the chosen export size; where that is taller than the stage it is cropped, never boxed */
+.fit{position:absolute;left:0;top:50%;width:100%;aspect-ratio:var(--ar);transform:translateY(-50%)}
+.fit canvas{position:absolute;inset:0;width:100%;height:100%}
+.stage.is-full{position:fixed;inset:0;z-index:90;width:100%;height:100%;max-height:none;aspect-ratio:auto;margin:0;border-radius:0;box-shadow:none;touch-action:none}
+.stage.is-full .fit{top:0;height:100%;aspect-ratio:auto;transform:none}
+.stage.is-full .ic{bottom:calc(env(safe-area-inset-bottom,0px) + 14px)}
+.stage.idle{cursor:none}
+.stage.idle .nav,.stage.idle .ic{opacity:0;pointer-events:none}
+/* show: the wallpapers as a full-screen projection. One canvas draws; a second one on top holds the last frame during a change and fades away. */
+.show{position:fixed;inset:0;z-index:95;background:#000;touch-action:none;overflow:hidden}
+.show canvas{position:absolute;inset:0;width:100%;height:100%}
+.show-fade{opacity:0;pointer-events:none}
+.show.idle{cursor:none}
+.show.idle .nav,.show.idle .ic{opacity:0;pointer-events:none}
+.show .ic{bottom:calc(env(safe-area-inset-bottom,0px) + 10px)}
+.show .sh-x{right:6px}
+.show .sh-row{position:absolute;left:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);z-index:2;display:flex;gap:2px}
+.show .sh-row .ic{position:static;width:auto;padding-inline:10px;border-radius:99px;font:400 .74rem/1 var(--font-body);letter-spacing:.2em;text-transform:uppercase}
+.show .sh-row .ic[aria-pressed="true"]{opacity:1;text-decoration:underline;text-underline-offset:6px}
+.sh-msg{position:absolute;left:20px;right:20px;bottom:calc(env(safe-area-inset-bottom,0px) + 62px);z-index:2;margin:0;font-size:.84rem;color:var(--screen-fg);text-shadow:0 1px 6px #000;pointer-events:none}
+.sh-msg:empty{display:none}
+body.show-on{overflow:hidden}
+body.full-on{overflow:hidden}
+body.full-on .bar{visibility:hidden}
+body.full-on .stage-col{z-index:60}
+.studio-head{display:grid;gap:2px;padding-bottom:14px}
+.title-input{width:100%;min-width:0;background:none;border:0;border-bottom:1px solid transparent;padding:4px 0;
+  font:400 clamp(1.3rem,2.6vw,1.8rem)/1.2 var(--font-logo);letter-spacing:.03em;transition:border-color .5s}
+.title-input:hover,.title-input:focus{border-bottom-color:var(--line);outline:0}
+@media (min-width:1000px){
+  .studio{display:grid;grid-template-columns:minmax(0,1fr) 380px;column-gap:40px;align-items:start;padding-block:8px 0;--stage-maxh:74vh}
+  .edit{display:contents}
+  .stage-col{grid-column:1;grid-row:1/span 2;top:calc(env(safe-area-inset-top,0px) + var(--bar-h) + 8px);margin:0;padding:0;background:none}
+  .stage-col::before{content:none}
+  .stage{width:min(100%,calc(var(--stage-maxh) * var(--ar)));max-height:none;margin-inline:auto;border-radius:20px;box-shadow:0 40px 110px -40px #000}
+  .panel{grid-column:2;grid-row:1}
+  .export{grid-column:2;grid-row:2}
+}
+.panel{display:grid;gap:0;align-content:start;min-width:0;margin-top:calc(-1 * var(--leave));padding-top:20px}
+@media (min-width:1000px){.panel{margin-top:0;padding-top:0}}
+.fold{border-top:1px solid var(--line);padding-block:4px}
+.fold summary{display:flex;justify-content:space-between;align-items:center;list-style:none;cursor:pointer;padding-block:14px;
+  font:400 .78rem/1.1 var(--font-body);letter-spacing:.2em;text-transform:uppercase;color:var(--muted);transition:color .5s}
+.fold[open] summary,.fold summary:hover{color:var(--fg)}
+.fold summary::-webkit-details-marker{display:none}
+.fold summary::after{content:"+";font:300 1.4rem/1 var(--font-body);transition:transform .8s var(--ease)}
+.fold[open] summary::after{transform:rotate(135deg)}
+.fold>.group,.fold>.fx-grid{padding-bottom:20px;animation:rise .8s var(--ease) both}
+.group{display:grid;gap:12px}
+.fx-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.fx{display:grid;gap:6px;padding:0;border:0;background:none;text-align:left;font-size:.78rem;color:var(--muted);min-width:0;transition:color .5s}
+.fx canvas{width:100%;aspect-ratio:16/9;border-radius:10px;outline:2px solid transparent;outline-offset:2px;transition:outline-color .5s,transform .7s var(--ease)}
+.fx:hover canvas{transform:translateY(-2px)}
+.fx[aria-pressed="true"]{color:var(--fg)}
+.fx[aria-pressed="true"] canvas{outline-color:var(--fg)}
+.fx span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pal-row{display:flex;flex-wrap:wrap;gap:10px}
+.pal{width:40px;height:30px;border-radius:999px;border:0;padding:0;outline:2px solid transparent;outline-offset:2px;transition:outline-color .5s,transform .6s var(--ease)}
+.pal:hover{transform:scale(1.08)}
+.pal[aria-pressed="true"]{outline-color:var(--fg)}
+.color-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.color-row label{display:grid;gap:5px;font-size:.78rem;color:var(--muted)}
+.color-row input{width:100%;height:34px;padding:0;border:1px solid var(--line);border-radius:999px;background:none}
+/* sliders: a hairline that fills with the wallpaper's own colors, and a small point of light to hold */
+.sl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 12px;align-items:baseline;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.sl span{grid-area:1/1}
+.sl output{grid-area:1/2;text-align:right;white-space:nowrap;font-size:.82rem;letter-spacing:.04em;text-transform:none;color:var(--fg);font-variant-numeric:tabular-nums}
+.sl input{grid-area:2/1/3/3}
+input[type=range]{--p:.5;-webkit-appearance:none;appearance:none;display:block;width:100%;height:34px;margin:0;padding:0;border:0;background:none;cursor:pointer;touch-action:pan-y;-webkit-tap-highlight-color:transparent}
+input[type=range]:focus-visible{outline:0}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:99px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--w1) 55%,transparent),var(--w2) 62%,var(--w3)) 0 0/calc(12px + (100% - 24px) * var(--p)) 100% no-repeat,var(--track)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:24px;height:24px;margin-top:-10.5px;border:0;border-radius:50%;
+  background:radial-gradient(circle,var(--fg) 0 20%,color-mix(in srgb,var(--w3) 75%,transparent) 25%,color-mix(in srgb,var(--w2) 34%,transparent) 52%,transparent 71%);
+  transition:transform .45s var(--ease)}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.15)}
+input[type=range]:active::-webkit-slider-thumb,input[type=range]:focus-visible::-webkit-slider-thumb{transform:scale(1.45)}
+input[type=range]::-moz-range-track{height:3px;border-radius:99px;background:var(--track)}
+input[type=range]::-moz-range-progress{height:3px;border-radius:99px;background:linear-gradient(90deg,color-mix(in srgb,var(--w1) 55%,transparent),var(--w2) 62%,var(--w3))}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border:0;border-radius:50%;
+  background:radial-gradient(circle,var(--fg) 0 20%,color-mix(in srgb,var(--w3) 75%,transparent) 25%,color-mix(in srgb,var(--w2) 34%,transparent) 52%,transparent 71%);
+  transition:transform .45s var(--ease)}
+input[type=range]:active::-moz-range-thumb,input[type=range]:focus-visible::-moz-range-thumb{transform:scale(1.45)}
+.field{display:grid;gap:6px;font-size:.9rem;color:var(--muted)}
+.field input[type=text],.field select,.pair select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-ctl);padding:10px 14px;color:var(--fg)}
+.field select option,.pair select option{background:var(--panel);color:var(--fg)}
+.check{display:flex;gap:10px;align-items:center;font-size:.95rem}
+.check input{width:17px;height:17px;accent-color:var(--accent)}
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.hint{color:var(--muted);font-size:.86rem}
+.export{margin-top:26px;background:rgba(24,15,22,.72);border:1px solid var(--line);border-radius:var(--r-screen);padding:22px}
+.export legend{font:400 .78rem/1.1 var(--font-body);letter-spacing:.2em;text-transform:uppercase;color:var(--muted);padding:0 6px;margin-left:-6px}
+.export .btn{width:100%}
+.dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.dl .wide{grid-column:1/-1}
+.export .btn:not(.primary){background:none}
+.status{font-size:.92rem}
+.status:empty{display:none}
+.status.err{color:var(--warn)}
+progress{width:100%;height:4px;accent-color:var(--accent)}
+.file-btn{position:relative;overflow:hidden}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+/* clock overlay, style pickers, purchase state */
+.overlay-cv{position:absolute;inset:0;width:100%;height:100%;outline-offset:-3px;pointer-events:none}
+.overlay-cv.drag{cursor:grab}
+.overlay-cv.dragging{cursor:grabbing}
+.overlay-cv.touch{touch-action:none}
+.seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;padding:3px;background:var(--surface);border:1px solid var(--line);border-radius:999px}
+.seg button{border:0;background:none;padding:8px 10px;border-radius:999px;font-weight:400;color:var(--muted);transition:background .6s var(--ease),color .5s}
+.seg button[aria-pressed="true"]{background:var(--raised);color:var(--fg)}
+.color-row.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.licence{display:grid;justify-items:start;gap:10px;padding:14px 16px;border-radius:var(--r-ctl);background:var(--raised);font-size:.92rem}
+.licence p{color:var(--muted)}
+.licence strong{color:var(--fg);font-weight:400}
+.licence.ok{outline:1px solid var(--accent)}
+.done{display:grid;gap:14px;padding-block:16px}
+.done h3{font:400 1.1rem/1.3 var(--font-logo);letter-spacing:.04em}
+@media (max-width:520px){
+  .logo{font-size:.9rem}
+  .bar{gap:14px}
+  .cart-btn span{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+<canvas class="bg" id="bgCanvas" aria-hidden="true"></canvas>
+<div class="grain" id="grain" aria-hidden="true"></div>
+<div class="page">
+  <header class="bar">
+    <button class="logo" type="button" data-go="gallery" aria-label="Dreamscreen, back to the gallery"><i></i>dreamscreen</button>
+    <nav class="tabs" aria-label="Main">
+      <button type="button" data-go="gallery" id="tabGallery" aria-current="page">Gallery</button>
+      <button type="button" data-go="studio" id="tabStudio">Studio</button>
+      <button type="button" id="tabShow">Show</button>
+    </nav>
+    <button class="cart-btn" type="button" id="cartOpen"><span>Cart</span><b id="cartCount">0</b></button>
+  </header>
+
+  <main>
+    <div id="viewGallery">
+      <section class="hero" id="hero" aria-label="Dreamscreen">
+        <h1 class="mark" aria-label="Dreamscreen"><span class="m-base" aria-hidden="true">dreamscreen</span><span class="m-r" aria-hidden="true">dreamscreen</span><span class="m-c" aria-hidden="true">dreamscreen</span></h1>
+        <span class="cue" aria-hidden="true"></span>
+      </section>
+
+      <section class="section" id="galleryList" aria-labelledby="galH">
+        <div class="section-head">
+          <div class="vh"><h2 id="galH">Wallpapers</h2><span class="count" id="galCount"></span></div>
+          <div class="filters" hidden>
+            <div class="chips" id="typeChips" role="group" aria-label="Wallpaper type"></div>
+            <div class="chips" id="catChips" role="group" aria-label="Category" hidden></div>
+          </div>
+        </div>
+        <div class="grid" id="grid"></div>
+        <p class="empty" id="gridEmpty" hidden>No wallpaper matches this selection. Try another category.</p>
+      </section>
+
+      <section class="section how-wrap" aria-labelledby="howH">
+        <h2 class="vh" id="howH">How it works</h2>
+        <ul class="how">
+          <li><b>Loops forever</b><span>No jump, no seam.</span></li>
+          <li><b>Yours to shape</b><span>Colors, motion and grain in the Studio.</span></li>
+          <li><b>Runs anywhere</b><span>Dreamscreen Player, Wallpaper Engine, image or video.</span></li>
+        </ul>
+        <p class="foot" id="foot">$1.44 each. Demo store, nothing is charged.</p>
+      </section>
+    </div>
+
+    <div id="viewStudio" hidden>
+      <div class="studio">
+        <div class="edit">
+        <div class="stage-col">
+          <div class="stage swipe" id="stage">
+            <div class="fit"><canvas class="slide-cv" id="studioCanvas"></canvas><canvas class="overlay-cv" id="overlayCanvas" aria-hidden="true"></canvas></div>
+            <button class="nav prev" type="button" id="sPrev" aria-label="Previous wallpaper"></button>
+            <button class="nav next" type="button" id="sNext" aria-label="Next wallpaper"></button>
+            <button class="ic play" type="button" id="sPlay" aria-label="Pause"><svg class="off" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg><svg class="on" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l9 6-9 6z"/></svg></button>
+            <button class="ic full" type="button" id="sFull" aria-label="Full screen"><svg class="off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg><svg class="on" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/></svg></button>
+          </div>
+        </div>
+
+        <form class="panel" id="panel" novalidate>
+          <div class="studio-head">
+            <label class="vh" for="sTitle">Wallpaper name</label>
+            <input class="title-input" id="sTitle" type="text" maxlength="60" value="My wallpaper" autocomplete="off">
+            <div class="row">
+              <button class="link" type="button" id="sScratch">Reset</button>
+              <button class="link" type="button" id="sShuffle">Shuffle</button>
+              <button class="link" type="button" id="sRandom">Random</button>
+            </div>
+          </div>
+          <details class="fold" hidden><summary>Clock</summary>
+            <div class="group">
+              <label class="check"><input type="checkbox" id="cOn">Show clock</label>
+              <div class="group" id="cBody">
+                <div class="seg" role="group" aria-label="Clock type">
+                  <button type="button" id="cDigital" aria-pressed="true">Digital</button>
+                  <button type="button" id="cAnalog" aria-pressed="false">Analog</button>
+                </div>
+                <div class="fx-grid" id="cStyles" role="group" aria-label="Clock style"></div>
+                <label class="sl"><span>Size</span><input type="range" id="cSize" min="6" max="40" step="1"><output id="cSizeO"></output></label>
+                <div class="color-row two">
+                  <label>Color<input type="color" id="cColor"></label>
+                  <label>Accent<input type="color" id="cAccent"></label>
+                </div>
+                <button class="link" type="button" id="cAccentAuto" hidden>Match the accent to the palette</button>
+                <label class="check"><input type="checkbox" id="cSec">Show seconds</label>
+                <label class="check" id="cH24Row"><input type="checkbox" id="c24">24-hour time</label>
+                <label class="check" id="cSmoothRow"><input type="checkbox" id="cSmooth">Smooth seconds hand</label>
+                <label class="check"><input type="checkbox" id="cDate">Show the date</label>
+                <p class="hint">Drag the clock on the preview to move it. Click the preview and use the arrow keys to nudge it, or use the sliders.</p>
+                <label class="sl"><span>Horizontal</span><input type="range" id="cX" min="0" max="100" step="1"><output id="cXO"></output></label>
+                <label class="sl"><span>Vertical</span><input type="range" id="cY" min="0" max="100" step="1"><output id="cYO"></output></label>
+                <button class="btn small" type="button" id="cCenter">Center the clock</button>
+              </div>
+            </div>
+          </details>
+
+          <details class="fold" open><summary>Effect</summary><div class="fx-grid" id="fxGrid"></div></details>
+
+          <details class="fold"><summary>Colors</summary>
+            <div class="group">
+              <div class="pal-row" id="palRow"></div>
+              <div class="color-row">
+                <label>Background<input type="color" id="sC0"></label>
+                <label>Depth<input type="color" id="sC1"></label>
+                <label>Main<input type="color" id="sC2"></label>
+                <label>Highlights<input type="color" id="sC3"></label>
+              </div>
+            </div>
+          </details>
+
+          <details class="fold" open><summary>Motion and look</summary>
+            <div class="group">
+              <div class="seg" role="group" aria-label="Motion">
+                <button type="button" id="mAnim" aria-pressed="true">Animated</button>
+                <button type="button" id="mStill" aria-pressed="false">Still</button>
+              </div>
+              <label class="sl" id="sFrameRow" hidden><span>Moment</span><input type="range" id="sFrame" min="0" max="1" step="0.005"><output id="sFrameO"></output></label>
+              <label class="sl" id="sLoopRow"><span>Loop</span><input type="range" id="sLoop" min="8" max="40" step="1"><output id="sLoopO"></output></label>
+              <label class="sl" id="sSpeedRow"><span>Speed</span><input type="range" id="sSpeed" min="0.1" max="2" step="0.05"><output id="sSpeedO"></output></label>
+              <label class="sl"><span>Scale</span><input type="range" id="sScale" min="0.4" max="2.5" step="0.05"><output id="sScaleO"></output></label>
+              <label class="sl"><span>Intensity</span><input type="range" id="sInt" min="0" max="1.6" step="0.05"><output id="sIntO"></output></label>
+              <label class="sl"><span>Grain</span><input type="range" id="sGrain" min="0" max="1" step="0.05"><output id="sGrainO"></output></label>
+              <label class="sl"><span>Vignette</span><input type="range" id="sVig" min="0" max="1" step="0.05"><output id="sVigO"></output></label>
+            </div>
+          </details>
+
+          <details class="fold"><summary>Your own image</summary>
+            <div class="group">
+              <div class="row">
+                <span class="btn small file-btn">Upload<input type="file" id="sImg" accept="image/*" aria-label="Upload a background image"></span>
+                <button class="link" type="button" id="sImgRemove" hidden>Remove</button>
+              </div>
+              <label class="sl" id="sFxOverRow" hidden><span>Effect</span><input type="range" id="sFxOver" min="0" max="1.5" step="0.05"><output id="sFxOverO"></output></label>
+            </div>
+          </details>
+
+          
+
+          <details class="fold"><summary>Text</summary>
+            <div class="group">
+              <label class="field">Words<input type="text" id="sText" maxlength="80" autocomplete="off"></label>
+              <label class="field">Position<select id="sPos">
+                <option value="bc">Bottom center</option><option value="bl">Bottom left</option><option value="br">Bottom right</option>
+                <option value="tc">Top center</option><option value="tl">Top left</option><option value="tr">Top right</option></select></label>
+              <label class="sl"><span>Size</span><input type="range" id="tSize" min="2" max="12" step="0.5"><output id="tSizeO"></output></label>
+            </div>
+          </details>
+
+        </form>
+        </div>
+
+        <fieldset class="export"><legend>Download</legend>
+          <div class="group">
+            <div class="licence" id="licence" hidden></div>
+            <label class="field">Size<select id="sRes">
+              <option value="3840x2160">3840 × 2160 (4K)</option>
+              <option value="2560x1440">2560 × 1440 (QHD)</option>
+              <option value="1920x1080">1920 × 1080 (Full HD)</option>
+              <option value="3440x1440">3440 × 1440 (21:9)</option>
+              <option value="5120x1440">5120 × 1440 (32:9)</option>
+              <option value="2160x3840">2160 × 3840 (portrait)</option>
+              <option value="1179x2556">1179 × 2556 (iPhone)</option>
+              <option value="1290x2796">1290 × 2796 (iPhone Pro Max)</option></select></label>
+            <div class="pair">
+              <label class="field">Image<select id="sFmt">
+                <option value="png">PNG</option><option value="jpg">JPG</option></select></label>
+              <label class="field">Performance<select id="sPerf">
+                <option value="balanced">Balanced</option>
+                <option value="saver">Battery saver</option>
+                <option value="sharp">Sharp</option></select></label>
+            </div>
+            <div class="dl">
+              <button class="btn primary wide" type="button" id="xLV">Lively Wallpaper</button>
+              <button class="btn wide" type="button" id="xWE">Wallpaper Engine</button>
+              <button class="btn wide" type="button" id="xDS">Dreamscreen Player</button>
+              <button class="btn" type="button" id="xImg">Image</button>
+              <button class="btn" type="button" id="xVid">Loop video</button>
+            </div>
+            <progress id="xProg" max="1" value="0" hidden></progress>
+            <p class="status" id="xStatus" role="status" aria-live="polite"></p>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+  </main>
+</div>
+
+<dialog id="detail" aria-labelledby="dName">
+  <div class="detail-in" tabindex="-1" autofocus>
+    <div class="detail-screen swipe" id="dScreen"><canvas class="slide-cv" id="detailCanvas"></canvas><button class="nav prev" type="button" id="dPrev" aria-label="Previous wallpaper"></button><button class="nav next" type="button" id="dNext" aria-label="Next wallpaper"></button></div>
+    <div class="detail-info">
+      <div class="detail-top"><div><h2 id="dName"></h2><span class="price" id="dPrice"></span></div><button class="x" type="button" id="dClose" aria-label="Close">×</button></div>
+      <div class="row">
+        <button class="btn primary" type="button" id="dCart">Add to cart</button>
+        <button class="btn" type="button" id="dEdit">Try in Studio</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="cart" aria-labelledby="cartH">
+  <div class="cart-in" tabindex="-1" autofocus>
+    <div class="cart-head"><h2 id="cartH">Cart</h2><button class="x" type="button" id="cartClose" aria-label="Close cart">×</button></div>
+    <div class="cart-list" id="cartList"></div>
+    <div class="cart-foot" id="cartFoot">
+      <div class="total"><span>Total</span><span id="cartTotal">$0.00</span></div>
+      <button class="btn primary" type="button" id="cartPay">Continue to payment</button>
+      <p class="note" id="cartNote" hidden></p>
+    </div>
+  </div>
+</dialog>
+
+<div class="show" id="show" role="region" aria-label="Show" hidden>
+  <canvas id="showCanvas"></canvas>
+  <canvas class="show-fade" id="showFade" aria-hidden="true"></canvas>
+  <button class="nav prev" type="button" id="shPrev" aria-label="Previous wallpaper"></button>
+  <button class="nav next" type="button" id="shNext" aria-label="Next wallpaper"></button>
+  <p class="sh-msg" id="shMsg" role="status" aria-live="polite"></p>
+  <div class="sh-row">
+    <button class="ic" type="button" id="shTime"></button>
+    <button class="ic" type="button" id="shMic" aria-pressed="false" aria-label="Mic: move with the sound in the room">Mic</button>
+    <button class="ic" type="button" id="shSong" aria-pressed="false" aria-label="Song: play a music file and move with it">Song</button>
+  </div>
+  <input type="file" id="shFile" accept="audio/*" hidden>
+  <button class="ic sh-x" type="button" id="shClose" aria-label="Close the show"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+/* ================= shaders ================= */
+const VERT = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+const COMMON = `#ifndef OCT
+#define OCT 5
+#endif
+precision highp float;
+uniform vec2 u_res;uniform float u_time,u_loop;uniform vec3 u_c0,u_c1,u_c2,u_c3;
+uniform float u_scale,u_int,u_grain,u_vig,u_seed,u_imgOn,u_imgAspect,u_fxOver;
+uniform sampler2D u_img;
+vec2 SO;float TP;
+float h21(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+vec2 h22(vec2 p){vec3 q=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973));q+=dot(q,q.yzx+33.33);return fract((q.xx+q.yz)*q.zy);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*f*(f*(f*6.-15.)+10.);
+return mix(mix(h21(i),h21(i+vec2(1.,0.)),u.x),mix(h21(i+vec2(0.,1.)),h21(i+vec2(1.,1.)),u.x),u.y);}
+/* OCT octaves of value noise, rescaled to the range six octaves would give, so fewer octaves only lose fine detail */
+float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<OCT;i++){s+=a*vn(p);p=mat2(1.6,1.2,-1.2,1.6)*p+vec2(3.1,1.7);a*=.5;}return s*(.984375/(1.-pow(.5,float(OCT))));}
+vec3 pal(float t){t=clamp(t,0.,1.)*3.;vec3 c=mix(u_c0,u_c1,smoothstep(0.,1.,t));c=mix(c,u_c2,smoothstep(1.,2.,t));return mix(c,u_c3,smoothstep(2.,3.,t));}
+/* Seamless loops: all motion is periodic in u_loop seconds. TP is the loop angle, 0..2pi.
+   lp(w): a phase that turns a whole number of times per loop, as close to w rad/s as possible.
+   dr(s): a drift for noise that travels in a circle, so the noise comes back to where it started. */
+float lp(float w){return TP*max(1.,floor(w*u_loop/6.2832+.5));}
+float ls(float w,float ph){return sin(lp(w)+ph);}
+float lc(float w,float ph){return cos(lp(w)+ph);}
+vec2 dr(float s){return s*u_loop/6.2832*vec2(cos(TP),sin(TP));}
+float lf(float s){return fract(TP/6.2832*max(1.,floor(s*u_loop+.5)));}
+float stars(vec2 P,float dens,float t,float k){vec2 sp=P*dens+k*31.7;vec2 id=floor(sp);vec2 f=fract(sp)-.5;float h=h21(id+k*7.3);
+vec2 o=(h22(id+k)-.5)*.7;float tw=.65+.35*sin(TP*floor(1.+h*4.)+h*50.);
+return step(.93,h)*smoothstep(.12,0.,length(f-o))*tw*(.35+.65*fract(h*37.));}
+`;
+const MAIN = `
+void main(){
+vec2 fc=gl_FragCoord.xy;vec2 uv=fc/u_res;vec2 P=(fc-.5*u_res)/u_res.y;vec2 p=P/u_scale;
+SO=vec2(u_seed*1.731,-u_seed*.977);TP=6.2831853*fract(u_time/u_loop);
+vec3 col=effect(uv,P,p,u_time);
+if(u_imgOn>.5){float ra=u_res.x/u_res.y;vec2 q=uv-.5;
+if(ra>u_imgAspect)q.y*=u_imgAspect/ra;else q.x*=ra/u_imgAspect;
+vec3 im=texture2D(u_img,q+.5).rgb;col=1.-(1.-im)*(1.-clamp(col*u_fxOver,0.,1.));}
+vec2 v=uv-.5;col*=mix(1.,smoothstep(.92,.2,length(v)),u_vig);
+float n=h21(fc+fract(u_seed*.37)*91.);col+=(n-.5)*(u_grain*.11+.006);
+gl_FragColor=vec4(clamp(col,0.,1.),1.);}`;
+
+const FX = {
+aura: { name: 'Aura', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float w=fbm(p*.9+SO+dr(.035))-.5;
+float y1=.1+p.x*.28+.2*sin(p.x*2.6+lp(.1)+SO.x)+w*.45;
+float th=.2+.09*sin(p.x*1.9-lp(.08)+SO.y);
+float y2=y1-th-.05*sin(p.x*4.3+lp(.12));
+float sf=.1+.05*sin(p.x*1.3+lp(.07));
+float v=smoothstep(sf,-sf,p.y-y1)*smoothstep(-sf,sf,p.y-y2);
+float glow=exp(-abs(p.y-(y1+y2)*.5)*3.2);
+v=v*.9+glow*.32;
+vec3 col=pal(clamp(v*u_int,0.,1.));
+col+=u_c1*.25*exp(-length(p-vec2(.55+.1*lc(.05,SO.x),-.35))*2.5)*u_int;
+return col;}` },
+
+thermal: { name: 'Thermal', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float v=0.;
+for(int i=0;i<5;i++){float fi=float(i);
+vec2 c=vec2(.55*sin(fi*2.1+SO.x)+.17*ls(.11+fi*.03,fi*1.7),.33*cos(fi*1.7+SO.y)+.13*lc(.09+fi*.02,fi*2.3));
+vec2 d=(p-c)*vec2(1.,1.25+.3*sin(fi*1.3));
+v+=exp(-dot(d,d)*(4.5+fi*1.4))*(.55+.25*sin(fi*3.1+SO.x));}
+float n=fbm(p*1.7+SO+dr(.05));
+v=clamp((v*(.8+.45*n)+(n-.5)*.12)*1.1*u_int,0.,1.);
+vec3 col=pal(v);
+col*=.93+.07*sin(v*55.);
+return col;}` },
+
+ribbon: { name: 'Swoosh', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float ph=lp(.08)+SO.x;
+float cx=.27*sin(p.y*2.2+ph)+.1*sin(p.y*4.6-lp(.13)+SO.y)+p.y*.35;
+float d=p.x-cx;
+float sh=.5+.5*sin(p.y*1.6-ph);
+float aa=2./(u_res.y*u_scale);
+float edge=smoothstep(aa*3.,-aa*3.,d);
+float inside=exp(min(d,0.)*3.2)*edge;
+float rim=exp(-abs(d)*45.)*.55;
+float lines=0.;
+for(int i=1;i<4;i++){float fi=float(i);float o=fi*(.032+.016*sh);lines+=exp(-abs(d-o)*240.)*(1.-fi*.22);}
+vec3 bg=mix(u_c0,u_c1,.3+.35*uv.y)*(.55+.45*fbm(p*1.4+SO+dr(.02)));
+float v=clamp(inside*.95+rim,0.,1.)*u_int;
+vec3 col=bg*(1.-inside*.85)+pal(.4+.6*v)*v;
+col+=pal(.85)*lines*.8*u_int*smoothstep(0.,.6,sh);
+return col;}` },
+
+glass: { name: 'Fluted Glass', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float N=13.;
+float sx=p.x*N;float cell=floor(sx);float f=fract(sx);
+vec2 q=vec2((cell+.5)/N+(f-.5)*.16,p.y*(1.+.12*(f-.5)));
+vec2 a=vec2(.25*ls(.09,SO.x),-.05+.2*lc(.07,SO.y));
+float v=exp(-length((q-a)*vec2(1.2,.8))*2.2);
+v+=.6*exp(-length((q-vec2(-.42-.1*lc(.06,1.),.33))*vec2(1.,1.4))*3.);
+float n=fbm(q*1.6+SO+dr(.04));
+v=clamp(v*(.6+.6*n)*u_int,0.,1.);
+vec3 col=pal(v);
+col*=.74+.26*smoothstep(0.,.45,f)*smoothstep(1.,.65,f);
+col+=pal(1.)*pow(f,14.)*.18*v;
+return col;}` },
+
+river: { name: 'River', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float env=exp(-p.x*p.x*1.1);
+float n=fbm(vec2(p.x*2.,p.y*3.)+SO+dr(.05));
+float z=(.16*sin(p.x*9.+lp(.25)+SO.y)+.05*sin(p.x*23.-lp(.4)))*env;
+float d=p.y+.05*ls(.1,SO.x)-z-(n-.5)*.12;
+float band=exp(-d*d*26.);
+vec3 col=u_c0+u_c1*.1*exp(-abs(d)*2.);
+col+=pal(clamp(.55+.45*sin(d*9.+n*2.+1.),0.,1.))*band*u_int;
+col+=pal(1.)*exp(-d*d*420.)*.22*u_int;
+return col;}` },
+
+eclipse: { name: 'Eclipse', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec2 q=p-vec2(0.,.04*ls(.06,SO.x));
+float r=length(q),R=.31;
+vec2 dir=q/max(r,1e-4);
+float top=.5+.5*dot(dir,vec2(sin(.3*ls(.1,SO.y)),cos(.3*ls(.1,SO.y))));
+float n=fbm(dir*1.6+r*3.+dr(.04)+SO);
+float rim=exp(-abs(r-R)*(19.-9.*n));
+float halo=exp(-max(r-R,0.)*4.2)*step(R,r)*.55;
+vec3 rc=mix(u_c1*1.7,pal(.9),smoothstep(.2,.85,top));
+vec3 col=u_c0+rc*(rim*1.1+halo*(.4+.6*n))*u_int;
+col*=1.-smoothstep(R,R-.02,r)*.93;
+col+=pal(1.)*pow(rim,8.)*.35*u_int;
+return col;}` },
+
+flame: { name: 'Flame', src: `
+float flow(vec2 q){
+float n=max(1.,floor(.3*u_loop/1.5+.5));float ph=TP/6.2832*n;
+float a=fract(ph),b=fract(ph+.5);
+float fa=fbm(q-vec2(0.,a*1.5)),fb=fbm(q-vec2(0.,b*1.5)+vec2(3.7,1.9));
+return mix(fb,fa,1.-abs(2.*a-1.));}
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float n=flow(vec2(p.x*3.,p.y*1.7)+SO);
+float tongue=fbm(vec2(p.x*3.4+SO.x,1.)+dr(.05))*.5;
+float v=clamp((n-.42)*2.6-(uv.y+.04-tongue)*2.4,0.,1.);
+vec3 col=pal(pow(v,1.7)*.86*u_int);
+col+=u_c3*pow(v,9.)*.22*u_int;
+return col;}` },
+
+afterglow: { name: 'Afterglow', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec2 c=vec2(-.2+.04*ls(.09,SO.x),.02*ls(.07,1.3));
+vec2 q=p-c;
+float n=fbm(vec2(q.x*2.4,q.y*.7)+vec2(SO.x,0.)+dr(.05));
+float n2=fbm(vec2(q.x*6.,q.y*1.4)+n*2.+dr(.07).yx);
+float d=length(vec2(q.x*1.1,q.y*.42))+(n-.5)*.4+(n2-.5)*.14;
+float heat=pow(clamp(1.-d*1.05,0.,1.),2.1)*1.35*u_int;
+vec3 col=pal(heat);
+col+=u_c3*pow(clamp(1.-d*2.2,0.,1.),3.)*.5*u_int;
+float gy=-.3;
+col=mix(col,col*.16,smoothstep(gy+.02,gy-.12,P.y)*.88);
+return col;}` },
+
+streaks: { name: 'Streaks', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float x=p.x*1.5+SO.x;
+float w=fbm(vec2(x*.9,uv.y*.5+SO.y)+dr(.025));
+float s=fbm(vec2(x*2.3+(w-.5)*2.2,uv.y*.28+SO.y*.3)+dr(.02).yx);
+float band=smoothstep(.2,.8,s);
+float v=clamp(band*1.15+(uv.y-.5)*.2-.12+(w-.5)*.5,0.,1.)*u_int;
+vec3 col=pal(v);
+col*=mix(.2,1.,smoothstep(0.,.9,uv.x*.5+(1.-uv.y)*.65));
+float gy=-.32;
+col=mix(col,u_c0*.6,smoothstep(gy+.03,gy-.04,P.y)*.94);
+col+=u_c3*.14*exp(-abs(P.y-gy)*18.)*u_int;
+return col;}` },
+
+starburst: { name: 'Starburst', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec3 col=u_c0+u_c1*.05;
+float ang=.35*ls(.07,SO.x)+SO.y*.1;
+float ca=cos(ang),sa=sin(ang);
+vec2 q=vec2(ca*p.x-sa*p.y,sa*p.x+ca*p.y);
+float R=.46+.025*ls(.5,0.);
+float f=pow(abs(q.x),.55)+pow(abs(q.y),.55)-pow(R,.55);
+col+=u_c2*(exp(-abs(f)*10.)*1.5+exp(-abs(f)*3.)*.25)*u_int;
+col+=u_c3*exp(-abs(f+.17)*11.)*.95*u_int;
+col+=u_c1*exp(-abs(f+.36)*13.)*1.1*u_int;
+col+=u_c2*.1*exp(-length(q)*2.4);
+col+=stars(P,150.,t,1.)*.5;
+return col;}` },
+
+beam: { name: 'Beam', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float y0=-.2;
+vec3 col=mix(u_c0,u_c1*.55,exp(-abs(P.y-y0)*4.5)*step(y0,P.y)*.9);
+vec2 L=vec2(.14*u_scale+.015*ls(.2,SO.x),.36);
+float yy=P.y<y0?2.*y0-P.y:P.y;
+float dy=L.y-yy;
+float spread=.025+dy*.5;
+float inb=smoothstep(spread,spread*.15,abs(P.x-L.x))*smoothstep(-.01,.06,dy);
+float fog=fbm(vec2(P.x*3.,yy*2.)+dr(.04)+SO)*.35+.65;
+float bi=inb*exp(-max(dy,0.)*1.1)*fog*1.5*u_int;
+float below=step(P.y,y0);
+float refl=mix(1.,.34*(.7+.3*sin(P.y*140.+lp(1.5))),below);
+col+=pal(clamp(bi,0.,1.))*refl;
+float ld=length(P-L);
+col+=u_c3*exp(-ld*14.)*.9*u_int+u_c2*exp(-ld*4.5)*.3*u_int;
+col+=u_c2*.1*exp(-abs(P.y-y0)*16.)*u_int;
+return col;}` },
+
+melt: { name: 'Melt', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec2 q=p*1.15+SO;
+float f1=fbm(q+dr(.03));
+float f2=fbm(q+2.6*f1+vec2(1.7,9.2)+dr(.02).yx);
+float f3=fbm(q+2.2*f2+vec2(8.3,2.8)-dr(.025));
+float bias=(.5-uv.y)*.95+(uv.x-.5)*.4;
+float v=clamp(f3*1.15+bias*.85-.18,0.,1.)*u_int;
+vec3 col=pal(pow(v,1.15));
+col+=u_c3*pow(f2,3.)*.22*u_int;
+return col;}` },
+
+disc: { name: 'Disc', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float ca=cos(.55),sa=sin(.55);
+vec2 q=vec2(ca*p.x-sa*p.y,sa*p.x+ca*p.y);q.y*=1.55;
+float r=length(q);float a=atan(q.y,q.x);
+float R=.4,r0=.075;
+vec3 col=u_c0+u_c1*.1*exp(-length(p)*1.6);
+col+=u_c2*.12*exp(-abs(r-R)*5.)*u_int;
+float edge=1.5/(u_res.y*u_scale);
+float disc=smoothstep(R,R-edge*2.,r)*smoothstep(r0-edge,r0+edge,r);
+float an=fbm(vec2(a*1.2+SO.x,r*5.)+dr(.02));
+float sp=pow(.5+.5*sin(a*2.+lp(.15)+SO.y),6.);
+vec3 rb=.5+.5*cos(6.2832*(an*1.1+r*1.2+vec3(0.,.33,.67))+lp(.063));
+vec3 metal=mix(u_c1,u_c3,sp*.9+an*.25);
+metal=mix(metal,rb,.35*u_int);
+metal*=.5+.7*smoothstep(R,r0,r)*(.6+.8*an);
+col=mix(col,metal,disc);
+col+=u_c3*smoothstep(.01,0.,abs(r-R))*.4;
+return col;}` },
+
+echo: { name: 'Echo', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec3 col=u_c0+u_c1*.04;
+for(int i=0;i<7;i++){float fi=float(i);
+float ph=fract(fi/7.+lf(.045));
+float x=-.62+ph*1.5;
+float sc=mix(1.,.16,ph);
+float wob=1.+.08*ls(.4,fi*1.7+SO.x);
+vec2 d=(p-vec2(x,0.))/vec2(.1+.1*(1.-ph),.3*sc*wob);
+float s=pow(abs(d.x),2.6)+pow(abs(d.y),2.);
+float shape=exp(-s*1.3);
+float fade=smoothstep(0.,.08,ph)*(1.-ph*.82);
+col+=pal(mix(.95,.4,ph))*shape*fade*.95*u_int;}
+col+=u_c2*.08*exp(-abs(p.y)*5.)*u_int;
+return col;}` },
+
+fold: { name: 'Fold', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float y=p.y;
+float cx=.05*sin(y*3.1+lp(.1)+SO.x);
+float w=.2+.05*sin(y*5.+lp(.14)+SO.y)+.05*sin(y*2.1-lp(.07));
+float dx=p.x-cx;
+float inside=smoothstep(w,w-.006,abs(dx));
+float edge=exp(-abs(abs(dx)-w)*70.);
+float inner=sin(dx*38.+sin(y*4.+lp(.1))*2.)*.5+.5;
+float low=smoothstep(.15,-.45,y);
+vec3 col=u_c0*.9;
+col=mix(col,mix(u_c0,u_c1,.25+.5*inner)*.35,inside);
+col+=pal(clamp(.35+.65*low,0.,1.))*edge*(.35+1.1*low)*u_int;
+col+=pal(.75)*exp(-abs(y+.4)*9.)*inside*.6*u_int;
+col+=u_c2*.22*exp(-length(vec2(dx*.8,y+.42))*3.)*u_int;
+col+=u_c3*pow(inner,6.)*inside*low*.18*u_int;
+return col;}` },
+
+haze: { name: 'Haze', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec2 q=vec2(p.x*.9,p.y*.6)+SO;
+float f1=fbm(q*.9+dr(.02));
+float f2=fbm(q*1.3+f1*2.1+vec2(4.2,0.)+dr(.013).yx);
+float st=fbm(vec2(P.x*3.2+SO.x+f1*.8,0.)+dr(.015));
+vec2 a=vec2(-.75+.12*ls(.05,0.),.38+.1*lc(.04,0.));
+vec2 b=vec2(.8+.1*lc(.043,1.),-.2+.1*ls(.057,2.));
+vec2 c=vec2(.1+.15*ls(.031,3.),-.8);
+float la=exp(-length((P-a)*vec2(.9,.55))*3.1);
+float lb=exp(-length((P-b)*vec2(.8,.65))*3.4);
+float lc2=exp(-length((P-c)*vec2(.5,1.))*3.);
+float v=(la*.85+lb*.8+lc2*.65)*(.3+f2*.95)*(.55+.8*st);
+return pal(clamp(v*.72,0.,1.));}` },
+};
+const FX_IDS = Object.keys(FX).filter(k => k !== 'haze');
+
+const PAL = [
+  { id: 'aura', name: 'Blue Aura', c: ['#03051c', '#0c2bb0', '#5d8dff', '#f4f6ff'] },
+  { id: 'thermal', name: 'Thermal', c: ['#050826', '#1846ff', '#b8ff3a', '#ff2a12'] },
+  { id: 'tealember', name: 'Teal Ember', c: ['#030c0c', '#0b3b38', '#ff3d14', '#ffb25c'] },
+  { id: 'iris', name: 'Iris', c: ['#05030c', '#5226ff', '#ff3d86', '#ffd27a'] },
+  { id: 'eclipse', name: 'Eclipse', c: ['#020208', '#1a3dff', '#ff2a3a', '#ffd6c8'] },
+  { id: 'ember', name: 'Ember', c: ['#07050a', '#7a1e5e', '#ff6a2a', '#fff0d8'] },
+  { id: 'violetfire', name: 'Violet Fire', c: ['#05060f', '#3b2a9a', '#ff4fa0', '#ffd9a0'] },
+  { id: 'acid', name: 'Acid', c: ['#060606', '#1d7f86', '#ff8a1f', '#e8ff7a'] },
+  { id: 'cobalt', name: 'Cobalt', c: ['#04050c', '#1a2a9a', '#ff5a3a', '#ffe6c8'] },
+  { id: 'lilac', name: 'Lilac', c: ['#0b0716', '#6a4aa8', '#ffa38c', '#fff0e0'] },
+  { id: 'chrome', name: 'Chrome', c: ['#050507', '#4a5a7a', '#9db4ff', '#ffffff'] },
+  { id: 'sunburn', name: 'Sunburn', c: ['#0a0405', '#8a1424', '#ff7a2e', '#ffe9a8'] },
+  { id: 'verdigris', name: 'Verdigris', c: ['#030807', '#0f4a44', '#ff7a3a', '#f4ffe8'] },
+  { id: 'redglow', name: 'Red Glow', c: ['#050202', '#6a0a0a', '#ff3a1a', '#ffe0c0'] },
+  { id: 'cyan', name: 'Cyan Dusk', c: ['#03070c', '#0d4a7a', '#34c8ff', '#ffe0cc'] },
+];
+const palById = id => PAL.find(p => p.id === id) || PAL[0];
+
+/* Example catalogue. Prices are samples. Every wallpaper plays as a seamless loop of `loop` seconds. */
+const ITEMS = [
+  { id: 'blue-aura', name: 'Blue Aura', fx: 'aura', pal: 'aura', live: true, cat: 'Aura', price: 1.44, seed: 7, grain: .5, desc: 'A pale wave of light folding slowly through deep navy.' },
+  { id: 'swoosh', name: 'Swoosh', fx: 'ribbon', pal: 'tealember', live: true, cat: 'Aura', price: 1.44, seed: 2, grain: .55, desc: 'An orange ribbon curls across dark teal, trailed by fine hairlines.' },
+  { id: 'thermal', name: 'Thermal', fx: 'thermal', pal: 'thermal', live: true, cat: 'Aura', price: 1.44, seed: 11, grain: .5, desc: 'Something warm drifting in the dark, seen through a thermal camera.' },
+  { id: 'fluted-glass', name: 'Fluted Glass', fx: 'glass', pal: 'ember', live: true, cat: 'Glass', price: 1.44, seed: 8, grain: .6, desc: 'Warm light behind a sheet of ribbed glass.' },
+  { id: 'thermal-river', name: 'Thermal River', fx: 'river', pal: 'iris', live: true, cat: 'Aura', price: 1.44, seed: 13, grain: .6, desc: 'A shimmering river of color snaking across the screen.' },
+  { id: 'void', name: 'Void', fx: 'eclipse', pal: 'eclipse', live: true, cat: 'Light', price: 1.44, seed: 4, grain: .7, desc: 'A black sun with a red crown and a cold blue edge.' },
+  { id: 'wildfire', name: 'Wildfire', fx: 'flame', pal: 'sunburn', live: true, cat: 'Light', price: 1.44, seed: 6, grain: .6, desc: 'Soft flames rising in an endless loop.' },
+  { id: 'afterimage', name: 'Afterimage', fx: 'thermal', pal: 'violetfire', live: true, cat: 'Aura', price: 1.44, seed: 23, grain: .55, desc: 'A thermal ghost in violet and pink.' },
+  { id: 'blue-glass', name: 'Blue Glass', fx: 'glass', pal: 'aura', live: true, cat: 'Glass', price: 1.44, seed: 19, grain: .5, desc: 'Cold light through fluted glass.' },
+  { id: 'afterglow', name: 'Afterglow', fx: 'afterglow', pal: 'ember', live: true, cat: 'Light', price: 1.44, seed: 4, desc: 'A wall of warm light rising out of the dark. Slow, grainy and quiet.' },
+  { id: 'melted-hour', name: 'Melted Hour', fx: 'melt', pal: 'lilac', live: true, cat: 'Haze', price: 1.44, seed: 9, desc: 'Peach and lavender melting into black.' },
+  { id: 'cathode', name: 'Cathode', fx: 'starburst', pal: 'acid', live: true, cat: 'Y2K', price: 1.44, seed: 6, desc: 'A glowing four-point star in orange, lime and teal, humming on a black screen.' },
+  { id: 'slow-fire', name: 'Slow Fire', fx: 'streaks', pal: 'ember', live: true, cat: 'Haze', price: 1.44, seed: 21, desc: 'Vertical bands of orange and magenta drifting in the dark.' },
+  { id: 'hologram', name: 'Hologram', fx: 'disc', pal: 'chrome', live: true, cat: 'Y2K', price: 1.44, seed: 3, desc: 'A chrome disc catching rainbow light, tilted in the dark.' },
+  { id: 'nova', name: 'Nova', fx: 'starburst', pal: 'cobalt', live: true, cat: 'Y2K', price: 1.44, seed: 17, desc: 'A cold blue star with a hot orange edge.' },
+  { id: 'peach-haze', name: 'Peach Haze', fx: 'melt', pal: 'ember', live: true, cat: 'Haze', price: 1.44, seed: 28, desc: 'Warm clouds of ember and plum with a heavy film grain.' },
+  { id: 'quiet-signal', name: 'Quiet Signal', fx: 'streaks', pal: 'cobalt', live: true, cat: 'Haze', price: 1.44, seed: 33, desc: 'Blue and red bands that never quite settle.' },
+  { id: 'walking-into-light', name: 'Walking Into Light', fx: 'afterglow', pal: 'lilac', live: true, cat: 'Light', price: 1.44, seed: 14, desc: 'Soft lilac glow with a peach core.' },
+  { id: 'spectrum', name: 'Spectrum', fx: 'disc', pal: 'violetfire', live: true, cat: 'Y2K', price: 1.44, seed: 25, desc: 'A mirror disc washed with violet and pink.' },
+  { id: 'heatwave', name: 'Heatwave', fx: 'melt', pal: 'sunburn', live: true, cat: 'Haze', price: 1.44, seed: 40, desc: 'Sunburnt reds melting upward into the dark.' },
+  { id: 'blue-hour-beam', name: 'Blue Hour Beam', fx: 'beam', pal: 'cyan', live: true, cat: 'Light', price: 1.44, seed: 19, desc: 'A cyan beam over still water.' },
+  { id: 'echo', name: 'Echo', fx: 'echo', pal: 'violetfire', live: true, cat: 'Y2K', price: 1.44, seed: 5, desc: 'A glowing shape sends soft copies of itself into the dark, each smaller and bluer than the last.' },
+  { id: 'red-room', name: 'Red Room', fx: 'fold', pal: 'redglow', live: true, cat: 'Light', price: 1.44, seed: 15, desc: 'A red glow pooling under a standing sheet of black.' },
+];
+const LOOP = 20;
+/* How fast a wallpaper moves in the gallery, in its detail view and as a fresh Studio template: the same everywhere,
+   so what you see in the gallery is what you edit and what you download. */
+const BASE_SPEED = .35;
+/* Everything is free for now: no prices, no cart, downloads open. Set to false to bring the store back as it was. */
+const FREE = true;
+const itemCfg = it => ({ fx: it.fx, colors: palById(it.pal).c, speed: BASE_SPEED, loop: it.loop || LOOP, scale: 1, intensity: 1, grain: it.grain != null ? it.grain : .85, vignette: .45, seed: it.seed, image: null, fxOver: .8 });
+
+const money = p => '$' + p.toFixed(2);
+const price = p => p ? money(p) : 'Free';
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+
+/* ================= WebGL stage ================= */
+/* Parsed colors are cached: draw() runs every frame for several canvases. */
+const rgbCache = new Map();
+const rgbOf = h => { let v = rgbCache.get(h); if (!v) { v = hexRgb(h); rgbCache.set(h, v); } return v; };
+const UNIFORMS = ['u_res', 'u_time', 'u_loop', 'u_c0', 'u_c1', 'u_c2', 'u_c3', 'u_scale', 'u_int', 'u_grain', 'u_vig', 'u_seed', 'u_imgOn', 'u_imgAspect', 'u_fxOver', 'u_img'];
+/* One WebGL context. Options:
+   preserve: keep the drawing buffer (for copying it elsewhere)
+   oct:      octaves of noise (4 for small or blurred canvases, 5 by default)
+   async:    compile shaders in the background (KHR_parallel_shader_compile); draw() returns null until the program is ready
+   power:    'low-power' (default, prefers the integrated GPU) or 'default' */
+class Stage {
+  constructor(canvas, opts = {}) {
+    this.canvas = canvas; this.progs = {}; this.tex = null; this.texSrc = null; this.lost = false; this.oct = opts.oct || 5; this.async = !!opts.async;
+    const o = { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: opts.power || 'low-power', preserveDrawingBuffer: !!opts.preserve };
+    let gl = null; try { gl = canvas.getContext('webgl', o) || canvas.getContext('experimental-webgl', o); } catch (e) {}
+    this.gl = gl; if (!gl) return;
+    this.init();
+    canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); this.lost = true; });
+    canvas.addEventListener('webglcontextrestored', () => { this.progs = {}; this.tex = null; this.texSrc = null; this.init(); this.lost = false; });
+  }
+  init() {
+    const gl = this.gl;
+    this.par = this.async ? gl.getExtension('KHR_parallel_shader_compile') : null;
+    this.buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    this.blank = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.blank);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+  }
+  /* starts compiling; returns the program, null if it failed, or undefined while it is still compiling */
+  prog(id) {
+    const gl = this.gl; let p = this.progs[id];
+    if (p === undefined) {
+      const mk = (t, src) => { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+      const h = gl.createProgram(), vs = mk(gl.VERTEX_SHADER, VERT), fs = mk(gl.FRAGMENT_SHADER, '#define OCT ' + this.oct + '\n' + COMMON + FX[id].src + MAIN);
+      gl.attachShader(h, vs); gl.attachShader(h, fs); gl.bindAttribLocation(h, 0, 'a'); gl.linkProgram(h);
+      if (this.par) gl.flush();                                 /* hands the compile to the GPU process right away */
+      p = this.progs[id] = { h, vs, fs, u: null };
+    }
+    if (!p || p.u) return p;
+    if (this.par && !gl.getProgramParameter(p.h, this.par.COMPLETION_STATUS_KHR)) return undefined;
+    if (!gl.getProgramParameter(p.h, gl.LINK_STATUS)) {
+      console.error('Shader ' + id + ': ' + (gl.getShaderInfoLog(p.fs) || gl.getProgramInfoLog(p.h)));
+      return (this.progs[id] = null);
+    }
+    p.u = {}; UNIFORMS.forEach(n => { p.u[n] = gl.getUniformLocation(p.h, n); });
+    gl.deleteShader(p.vs); gl.deleteShader(p.fs);
+    return p;
+  }
+  /* true when drawn, false when it cannot draw (no WebGL, broken shader), null while the shader is still compiling */
+  draw(cfg, phase) {
+    const gl = this.gl; if (!gl || this.lost) return false;
+    const p = this.prog(cfg.fx); if (p === undefined) return null; if (!p) return false;
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, u = p.u;
+    gl.viewport(0, 0, w, h); gl.useProgram(p.h);
+    const L = cfg.loop || LOOP; gl.uniform2f(u.u_res, w, h); gl.uniform1f(u.u_loop, L); gl.uniform1f(u.u_time, ((phase % L) + L) % L);
+    for (let i = 0; i < 4; i++) { const c = rgbOf(cfg.colors[i]); gl.uniform3f(u['u_c' + i], c[0], c[1], c[2]); }
+    gl.uniform1f(u.u_scale, cfg.scale); gl.uniform1f(u.u_int, cfg.intensity); gl.uniform1f(u.u_grain, cfg.grain);
+    gl.uniform1f(u.u_vig, cfg.vignette); gl.uniform1f(u.u_seed, cfg.seed); gl.uniform1f(u.u_fxOver, cfg.fxOver);
+    if (cfg.image) {
+      if (this.texSrc !== cfg.image) {
+        if (!this.tex) this.tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.tex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, cfg.image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        this.texSrc = cfg.image;
+      }
+      gl.bindTexture(gl.TEXTURE_2D, this.tex); gl.uniform1f(u.u_imgOn, 1); gl.uniform1f(u.u_imgAspect, cfg.image.width / cfg.image.height);
+    } else { gl.bindTexture(gl.TEXTURE_2D, this.blank); gl.uniform1f(u.u_imgOn, 0); gl.uniform1f(u.u_imgAspect, 1); }
+    gl.uniform1i(u.u_img, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return true;
+  }
+  destroy() { const e = this.gl && this.gl.getExtension('WEBGL_lose_context'); if (e) e.loseContext(); }
+}
+/* Without WebGL: a plain gradient in the wallpaper's palette, so nothing is ever blank. */
+const paintFallback = (cv, colors) => {
+  const x = cv.getContext('2d'); if (!x) return;
+  const g = x.createLinearGradient(0, cv.height, cv.width, 0); colors.forEach((c, i) => g.addColorStop(i / 3, c));
+  x.fillStyle = g; x.fillRect(0, 0, cv.width, cv.height);
+};
+
+/* shared small renderer for cards, thumbnails and cart rows */
+const CARD_W = 400, CARD_H = 225;
+const miniCv = document.createElement('canvas'); miniCv.width = CARD_W; miniCv.height = CARD_H;
+const mini = new Stage(miniCv, { preserve: true, oct: 4, async: true });
+const GL_OK = !!mini.gl;
+/* returns true once the real wallpaper was drawn; until its shader is ready the card shows a gradient in its colors */
+const drawMini = (ctx, cfg, phase) => {
+  const c = ctx.canvas, r = mini.draw(cfg, phase);
+  if (r) { ctx.drawImage(miniCv, 0, 0, c.width, c.height); return true; }
+  if (!ctx.__painted) { paintFallback(c, cfg.colors); ctx.__painted = true; }
+  return false;
+};
+
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+let accentNow = '';
+const setAccent = hex => { if (hex === accentNow) return; accentNow = hex; document.documentElement.style.setProperty('--accent', hex); };
+
+/* ================= clock renderer (also embedded in the Wallpaper Engine package) ================= */
+function makeClockRenderer() {
+  var SANS = '"Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif';
+  var MONO = '"Cascadia Mono",Consolas,"SF Mono",Menlo,ui-monospace,monospace';
+  var SERIF = '"Times New Roman",Times,"Liberation Serif",serif';
+  var DIG = {
+    thin: { font: SANS, w: 200, ls: -0.02 },
+    ghost: { font: SANS, w: 200, ls: -0.02, ghost: true },
+    bold: { font: SANS, w: 800, ls: -0.03 },
+    mono: { font: MONO, w: 500, ls: 0, blink: true },
+    serif: { font: SERIF, w: 400, ls: -0.01 },
+    stacked: { font: SANS, w: 700, ls: -0.03, stack: true },
+    glass: { font: SANS, w: 300, ls: -0.01, panel: true },
+    outline: { font: SANS, w: 700, ls: -0.02, outline: true },
+    neon: { font: SANS, w: 300, ls: 0.02, neon: true }
+  };
+  var DIGITAL = [['thin', 'Thin'], ['bold', 'Bold'], ['mono', 'Terminal'], ['serif', 'Serif'], ['stacked', 'Stacked'], ['glass', 'Glass'], ['outline', 'Outline'], ['neon', 'Neon'], ['ghost', 'Ghost']];
+  var ANALOG = [['minimal', 'Minimal'], ['classic', 'Classic'], ['modern', 'Modern'], ['ring', 'Ring'], ['bars', 'Bars'], ['blur', 'Blur']];
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function rgba(hex, a) {
+    var n = parseInt(String(hex).slice(1), 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function dateStr(d) { return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }); }
+  function parts(d, C) {
+    var h = d.getHours(), ap = '';
+    if (!C.h24) { ap = h < 12 ? 'AM' : 'PM'; h = h % 12 || 12; }
+    return { h: C.h24 ? pad(h) : String(h), m: pad(d.getMinutes()), s: pad(d.getSeconds()), ap: ap };
+  }
+
+  /* Lays text out glyph by glyph so every digit gets the same cell width and the clock never jiggles. */
+  function layoutLine(ctx, segs, st, fs) {
+    var x = 0, glyphs = [], i, j, k;
+    for (i = 0; i < segs.length; i++) {
+      var sg = segs[i], size = fs * sg.k;
+      ctx.font = st.w + ' ' + size + 'px ' + st.font;
+      var dw = 0;
+      for (k = 0; k < 10; k++) dw = Math.max(dw, ctx.measureText(String(k)).width);
+      for (j = 0; j < sg.t.length; j++) {
+        var ch = sg.t.charAt(j), rw = ctx.measureText(ch).width, isD = ch >= '0' && ch <= '9';
+        var cell = isD ? dw : rw;
+        glyphs.push({ ch: ch, x: x, w: cell, rw: rw, size: size, col: sg.col, a: sg.a == null ? 1 : sg.a });
+        x += cell + st.ls * size;
+      }
+    }
+    return { glyphs: glyphs, width: Math.max(0, x - st.ls * fs) };
+  }
+
+  function buildDigital(ctx, C, d, u, acc) {
+    var st = DIG[C.dStyle] || DIG.thin, fs = C.size * u, P = parts(d, C), col = C.color, rows = [];
+    var ap = P.ap ? { t: ' ' + P.ap, k: 0.26, col: col, a: 0.75 } : null;
+    if (st.stack) {
+      rows.push([{ t: P.h, k: 1, col: col }]);
+      var r2 = [{ t: P.m, k: 1, col: acc }];
+      if (C.seconds) r2.push({ t: ' ' + P.s, k: 0.34, col: col, a: 0.8 });
+      if (ap) r2.push(ap);
+      rows.push(r2);
+    } else {
+      var r1 = [{ t: P.h + ':' + P.m, k: 1, col: col }];
+      if (C.seconds) r1.push({ t: ':' + P.s, k: 0.42, col: acc });
+      if (ap) r1.push(ap);
+      rows.push(r1);
+    }
+    var lines = rows.map(function (r) { return layoutLine(ctx, r, st, fs); });
+    var cap = 0.72 * fs, lh = (st.stack ? 0.86 : 1) * fs;
+    var clockH = cap + (lines.length - 1) * lh;
+    var ds = fs * 0.24, gap = fs * 0.3, dtxt = C.date ? dateStr(d) : '';
+    var dateW = 0;
+    if (dtxt) { ctx.font = '500 ' + ds + 'px ' + SANS; dateW = ctx.measureText(dtxt).width; }
+    var innerW = Math.max(dateW, Math.max.apply(null, lines.map(function (l) { return l.width; })));
+    var innerH = clockH + (dtxt ? gap + ds * 0.95 : 0);
+    var px = st.panel ? fs * 0.45 : 0, py = st.panel ? fs * 0.36 : 0;
+    var w = innerW + 2 * px, h = innerH + 2 * py;
+    return {
+      w: w, h: h,
+      paint: function (x0, y0) {
+        var i, g, l, left, base, blinkOff = st.blink && d.getSeconds() % 2 === 1;
+        if (st.panel) {
+          var r = fs * 0.32;
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 3 * u; ctx.shadowOffsetY = 0.6 * u;
+          ctx.beginPath();
+          ctx.moveTo(x0 + r, y0); ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, r); ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, r);
+          ctx.arcTo(x0, y0 + h, x0, y0, r); ctx.arcTo(x0, y0, x0 + w, y0, r); ctx.closePath();
+          ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fill();
+          ctx.shadowColor = 'transparent'; ctx.lineWidth = Math.max(1, u * 0.14); ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.stroke();
+          ctx.restore();
+          ctx.shadowColor = 'transparent';
+        }
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        for (i = 0; i < lines.length; i++) {
+          l = lines[i]; left = x0 + px + (st.stack ? 0 : (innerW - l.width) / 2); base = y0 + py + cap + i * lh;
+          for (var gi = 0; gi < l.glyphs.length; gi++) {
+            g = l.glyphs[gi];
+            ctx.font = st.w + ' ' + g.size + 'px ' + st.font;
+            var gx = left + g.x + (g.w - g.rw) / 2, a = g.a;
+            if (g.ch === ':' && blinkOff) a *= 0.22;
+            ctx.globalAlpha = a;
+            if (st.outline) {
+              ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(1, g.size * 0.03); ctx.strokeStyle = g.col; ctx.strokeText(g.ch, gx, base);
+            } else if (st.ghost) {
+              ctx.save();
+              for (var gk = 6; gk >= 1; gk--) { ctx.globalAlpha = a * 0.1 * (7 - gk) / 6; ctx.fillStyle = acc; ctx.fillText(g.ch, gx - gk * g.size * 0.035, base); }
+              ctx.globalAlpha = a * 0.4; ctx.fillStyle = '#35e0ff'; ctx.fillText(g.ch, gx + g.size * 0.012, base);
+              ctx.globalAlpha = a; ctx.fillStyle = g.col; ctx.shadowColor = acc; ctx.shadowBlur = g.size * 0.16; ctx.fillText(g.ch, gx, base);
+              ctx.restore();
+            } else if (st.neon) {
+              ctx.save();
+              ctx.fillStyle = acc; ctx.shadowColor = acc; ctx.shadowBlur = g.size * 0.5; ctx.shadowOffsetY = 0; ctx.fillText(g.ch, gx, base);
+              ctx.fillStyle = g.col; ctx.shadowBlur = g.size * 0.12; ctx.fillText(g.ch, gx, base);
+              ctx.restore();
+            } else {
+              ctx.fillStyle = g.col; ctx.fillText(g.ch, gx, base);
+            }
+          }
+        }
+        ctx.globalAlpha = 1;
+        if (dtxt) {
+          ctx.font = '500 ' + ds + 'px ' + SANS; ctx.textAlign = st.stack ? 'left' : 'center'; ctx.fillStyle = col; ctx.globalAlpha = 0.9;
+          if (st.neon) { ctx.shadowColor = acc; ctx.shadowBlur = ds * 0.6; }
+          ctx.fillText(dtxt, st.stack ? x0 + px : x0 + w / 2, y0 + py + clockH + gap + ds * 0.74);
+          ctx.globalAlpha = 1;
+        }
+      }
+    };
+  }
+
+  function buildAnalog(ctx, C, d, u, acc) {
+    var R = C.size * u * 1.25, col = C.color, st = C.aStyle;
+    var ds = R * 0.19, gap = R * 0.24, dtxt = C.date ? dateStr(d) : '';
+    var w = 2 * R, h = 2 * R + (dtxt ? gap + ds * 0.95 : 0);
+    if (dtxt) { ctx.font = '500 ' + ds + 'px ' + SANS; w = Math.max(w, ctx.measureText(dtxt).width); }
+    var s = d.getSeconds() + (C.smooth ? d.getMilliseconds() / 1000 : 0);
+    var mi = d.getMinutes() + d.getSeconds() / 60, hr = (d.getHours() % 12) + mi / 60;
+    var TAU = Math.PI * 2;
+    return {
+      w: w, h: h,
+      paint: function (x0, y0) {
+        var cx = x0 + w / 2, cy = y0 + R, i;
+        function ang(f) { return f * TAU - Math.PI / 2; }
+        function line(a, r0, r1, wd, color, alpha, cap) {
+          ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+          ctx.lineWidth = wd; ctx.strokeStyle = color; ctx.globalAlpha = alpha == null ? 1 : alpha; ctx.lineCap = cap || 'round'; ctx.stroke(); ctx.globalAlpha = 1;
+        }
+        function dot(x, y, r, color, alpha) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = color; ctx.globalAlpha = alpha == null ? 1 : alpha; ctx.fill(); ctx.globalAlpha = 1; }
+        function taper(a, len, back, wd, color) {
+          ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.beginPath();
+          ctx.moveTo(-back, -wd * 0.25); ctx.lineTo(0, -wd / 2); ctx.lineTo(len, 0); ctx.lineTo(0, wd / 2); ctx.lineTo(-back, wd * 0.25); ctx.closePath();
+          ctx.fillStyle = color; ctx.fill(); ctx.restore();
+        }
+        var aH = ang(hr / 12), aM = ang(mi / 60), aS = ang(s / 60);
+
+        if (st === 'classic') {
+          ctx.beginPath(); ctx.arc(cx, cy, R * 0.985, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,.26)'; ctx.fill();
+          ctx.lineWidth = R * 0.025; ctx.strokeStyle = col; ctx.globalAlpha = 0.9; ctx.stroke(); ctx.globalAlpha = 1;
+          for (i = 0; i < 60; i++) {
+            if (i % 5 === 0) line(ang(i / 60), R * 0.86, R * 0.95, R * 0.022, col, 1, 'butt');
+            else line(ang(i / 60), R * 0.91, R * 0.95, R * 0.01, col, 0.55, 'butt');
+          }
+          ctx.font = '500 ' + R * 0.17 + 'px ' + SANS; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = col;
+          for (i = 1; i <= 12; i++) { var na = ang(i / 12); ctx.fillText(String(i), cx + Math.cos(na) * R * 0.7, cy + Math.sin(na) * R * 0.7); }
+          taper(aH, R * 0.48, R * 0.1, R * 0.075, col); taper(aM, R * 0.74, R * 0.12, R * 0.055, col);
+          if (C.seconds) line(aS, -R * 0.18, R * 0.82, R * 0.012, acc);
+          dot(cx, cy, R * 0.045, C.seconds ? acc : col);
+        } else if (st === 'modern') {
+          ctx.beginPath(); ctx.arc(cx, cy, R * 0.98, 0, TAU); ctx.fillStyle = rgba(col, 0.12); ctx.fill();
+          ctx.lineWidth = R * 0.02; ctx.strokeStyle = rgba(col, 0.35); ctx.stroke();
+          for (i = 0; i < 12; i++) {
+            var ma = ang(i / 12), mx = cx + Math.cos(ma) * R * 0.84, my = cy + Math.sin(ma) * R * 0.84;
+            if (i % 3 === 0) dot(mx, my, R * 0.04, i === 0 ? acc : col); else dot(mx, my, R * 0.02, col, 0.6);
+          }
+          line(aH, -R * 0.08, R * 0.46, R * 0.075, col); line(aM, -R * 0.08, R * 0.7, R * 0.055, col);
+          if (C.seconds) line(aS, -R * 0.14, R * 0.78, R * 0.02, acc);
+          dot(cx, cy, R * 0.08, col); dot(cx, cy, R * 0.035, acc);
+        } else if (st === 'ring') {
+          var frac = C.seconds ? s / 60 : mi / 60;
+          ctx.lineWidth = R * 0.06; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.arc(cx, cy, R * 0.9, 0, TAU); ctx.strokeStyle = rgba(col, 0.2); ctx.stroke();
+          if (frac > 0.002) { ctx.beginPath(); ctx.arc(cx, cy, R * 0.9, -Math.PI / 2, -Math.PI / 2 + frac * TAU); ctx.strokeStyle = acc; ctx.stroke(); }
+          line(aH, 0, R * 0.36, R * 0.05, col); line(aM, 0, R * 0.6, R * 0.034, col);
+          dot(cx, cy, R * 0.045, acc);
+        } else if (st === 'blur') {
+          ctx.save(); ctx.shadowColor = acc; ctx.shadowBlur = R * 0.07; ctx.lineCap = 'butt';
+          var k;
+          for (i = 0; i < 60; i++) {
+            var big = i % 5 === 0, a0 = ang(i / 60), sm = big ? 0.16 : 0.05, rr = R * (big ? 0.86 : 0.93);
+            for (k = 0; k < 6; k++) {
+              ctx.beginPath(); ctx.arc(cx, cy, rr, a0 - sm * (k + 1) / 6, a0 - sm * k / 6);
+              ctx.lineWidth = R * (big ? 0.075 : 0.035); ctx.strokeStyle = col; ctx.globalAlpha = (big ? 0.9 : 0.4) * (1 - k / 6); ctx.stroke();
+            }
+          }
+          ctx.globalAlpha = 1;
+          var trailA = C.seconds ? aS : aM;
+          for (k = 16; k >= 1; k--) line(trailA - k * 0.045, 0, R * 0.9, R * 0.02 * (1 + k * 0.25), acc, 0.5 * Math.pow(1 - k / 17, 2), 'butt');
+          ctx.shadowBlur = R * 0.05;
+          for (k = 6; k >= 1; k--) { line(aM - k * 0.03, 0, R * 0.72, R * 0.045, col, 0.09 * (7 - k) / 6, 'butt'); line(aH - k * 0.02, 0, R * 0.46, R * 0.07, col, 0.08 * (7 - k) / 6, 'butt'); }
+          line(aH, -R * 0.1, R * 0.46, R * 0.07, col, 1, 'butt'); line(aM, -R * 0.1, R * 0.72, R * 0.045, col, 1, 'butt');
+          if (C.seconds) line(aS, -R * 0.2, R * 0.9, R * 0.018, acc, 1, 'butt');
+          dot(cx, cy, R * 0.05, C.seconds ? acc : col);
+          ctx.restore();
+        } else if (st === 'bars') {
+          for (i = 0; i < 12; i++) {
+            var ba = ang(i / 12);
+            if (i % 3 === 0) line(ba, R * 0.7, R * 0.98, R * 0.045, i === 0 ? acc : col, 1, 'butt');
+            else line(ba, R * 0.84, R * 0.98, R * 0.025, col, 0.7, 'butt');
+          }
+          line(aH, -R * 0.1, R * 0.5, R * 0.07, col, 1, 'butt'); line(aM, -R * 0.1, R * 0.72, R * 0.05, col, 1, 'butt');
+          if (C.seconds) line(aS, -R * 0.22, R * 0.92, R * 0.015, acc, 1, 'butt');
+          dot(cx, cy, R * 0.055, C.seconds ? acc : col);
+        } else {
+          for (i = 0; i < 12; i++) {
+            var a2 = ang(i / 12);
+            if (i % 3 === 0) line(a2, R * 0.86, R * 0.98, R * 0.022, col, 0.95);
+            else dot(cx + Math.cos(a2) * R * 0.92, cy + Math.sin(a2) * R * 0.92, R * 0.012, col, 0.5);
+          }
+          line(aH, 0, R * 0.5, R * 0.045, col); line(aM, 0, R * 0.82, R * 0.03, col);
+          if (C.seconds) line(aS, -R * 0.16, R * 0.9, R * 0.012, acc);
+          dot(cx, cy, R * 0.045, C.seconds ? acc : col);
+        }
+        if (dtxt) {
+          ctx.font = '500 ' + ds + 'px ' + SANS; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = col; ctx.globalAlpha = 0.9;
+          ctx.fillText(dtxt, cx, y0 + 2 * R + gap + ds * 0.74); ctx.globalAlpha = 1;
+        }
+      }
+    };
+  }
+
+  function drawText(ctx, W, H, T, u) {
+    var s = (T.size || 4) * u, p = T.pos || 'bc';
+    var left = p === 'tl' || p === 'bl', right = p === 'tr' || p === 'br';
+    var x = left ? 7 * u : right ? W - 7 * u : W / 2, y = p.charAt(0) === 't' ? 7 * u + s / 2 : H - 7 * u - s / 2;
+    ctx.save(); ctx.font = '500 ' + s + 'px ' + SANS; ctx.fillStyle = '#fff'; ctx.textAlign = left ? 'left' : right ? 'right' : 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 1.6 * u; ctx.shadowOffsetY = 0.2 * u;
+    ctx.fillText(T.text, x, y, W - 14 * u); ctx.restore();
+  }
+
+  /* Draws the clock and the custom text onto ctx (W x H pixels). Returns the clock's bounding box, or null. */
+  function draw(ctx, W, H, C, T, d) {
+    var u = Math.min(W, H) / 100, box = null;
+    ctx.save();
+    if (C && C.on) {
+      var acc = C.accent || '#2fd6a3';
+      var b = C.kind === 'analog' ? buildAnalog(ctx, C, d, u, acc) : buildDigital(ctx, C, d, u, acc);
+      var m = 1.5 * u, cx = C.x * W, cy = C.y * H;
+      cx = b.w + 2 * m > W ? W / 2 : Math.min(Math.max(cx, b.w / 2 + m), W - b.w / 2 - m);
+      cy = b.h + 2 * m > H ? H / 2 : Math.min(Math.max(cy, b.h / 2 + m), H - b.h / 2 - m);
+      var x0 = cx - b.w / 2, y0 = cy - b.h / 2;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 1.4 * u; ctx.shadowOffsetY = 0.2 * u;
+      b.paint(x0, y0);
+      ctx.restore();
+      box = { x: x0, y: y0, w: b.w, h: b.h, m: m };
+    }
+    if (T && T.text) drawText(ctx, W, H, T, u);
+    ctx.restore();
+    return box;
+  }
+
+  return { draw: draw, digital: DIGITAL, analog: ANALOG };
+}
+
+/* ================= views ================= */
+let view = 'gallery';
+const viewGallery = $('#viewGallery'), viewStudio = $('#viewStudio');
+function go(v, push = true) {
+  const prevView = view;
+  view = v === 'studio' ? 'studio' : 'gallery'; document.body.dataset.view = view;
+  if (pseudoFull) setPseudo(false);
+  if (view === 'gallery' && (push || prevView === 'studio')) $('#hero').hidden = true;
+  viewGallery.hidden = view !== 'gallery'; viewStudio.hidden = view !== 'studio';
+  $('#tabGallery').toggleAttribute('aria-current', view === 'gallery'); $('#tabStudio').toggleAttribute('aria-current', view === 'studio');
+  if (view === 'gallery') $('#tabGallery').setAttribute('aria-current', 'page'); else $('#tabStudio').setAttribute('aria-current', 'page');
+  if (push) { try { history.replaceState(null, '', '#' + view); } catch (e) {} window.scrollTo(0, 0); }
+  if (view === 'studio') studio.enter(); else setAccent(DEFAULT_ACCENT);
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
+
+/* ================= render budget for the page background ================= */
+const IS_PHONE = matchMedia('(max-width: 700px)').matches;
+/* The background is a soft haze, so a small canvas scaled up by the browser looks the same as a full-size one. */
+const gov = { px: IS_PHONE ? 90000 : 160000, min: 50000, max: IS_PHONE ? 120000 : 220000, ema: 16.7, n: 0, half: false, cool: 0 };
+/* Lowers the pixel budget when frames take too long and raises it again when there is headroom. */
+function govTick(dt) {
+  gov.ema = gov.ema * .92 + Math.min(dt * 1000, 200) * .08;
+  if (++gov.n % 60) return;
+  if (gov.ema > 26 && gov.px > gov.min) gov.px = Math.max(gov.min, gov.px * .8);
+  else if (gov.ema < 18.5 && gov.px < gov.max) gov.px = Math.min(gov.max, gov.px * 1.08);
+  /* wallpapers are drawn on every frame; a device that cannot keep up drops to every other frame and tries again later */
+  if (gov.ema > 30) { gov.half = true; gov.cool = 12; } else if (gov.half && gov.ema < 21 && --gov.cool <= 0) gov.half = false;
+}
+/* shortest time between two drawings of one wallpaper: every frame up to about 90 a second, so fast screens do not double the work */
+const frameGap = () => gov.half ? .024 : .01;
+function fitCanvasPx(cv, maxPx) {
+  const r = cv.getBoundingClientRect(); if (!r.width || !r.height) return;
+  const k = Math.min(Math.min(window.devicePixelRatio || 1, 2), Math.sqrt(maxPx / (r.width * r.height)));
+  const w = Math.max(2, Math.round(r.width * k)), h = Math.max(2, Math.round(r.height * k));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+}
+
+/* ================= page background ================= */
+const DEFAULT_ACCENT = '#ff7a3d';
+const bgCv = $('#bgCanvas'), bgStage = new Stage(bgCv, { oct: 4, async: true });
+/* grain 0: the film grain is a static layer in CSS (.grain), so it stays crisp while the haze is drawn small */
+const BG_CFG = { fx: 'haze', colors: palById('ember').c, speed: 1, loop: 40, scale: 1, intensity: 1, grain: 0, vignette: .5, seed: 6, image: null, fxOver: .8 };
+const BG_FPS = 30;
+let bgPhase = 5, bgAcc = 0, bgDirty = true;
+function bgTick(dt) {
+  if (!bgStage.gl) return;
+  /* a dialog's blurred backdrop covers the field, so it holds still; that also keeps the blur from being recomputed */
+  const frozen = reduced || detailDlg.open || cartDlg.open || show.open;
+  bgAcc += dt;
+  if (!bgDirty && (frozen || bgAcc < 1 / BG_FPS)) return;
+  if (!frozen) bgPhase += bgAcc;
+  bgAcc = 0;
+  fitCanvasPx(bgCv, gov.px);
+  bgDirty = bgStage.draw(BG_CFG, bgPhase) === null;    /* still compiling: try again next frame */
+}
+
+/* ================= gallery ================= */
+const OWN_KEY = 'dreamscreen.owned', CART_KEY = 'dreamscreen.cart', STUDIO_KEY = 'dreamscreen.studio';
+const isKnown = id => ITEMS.some(i => i.id === id);
+const owned = new Set(store.get(OWN_KEY, []).filter(isKnown));
+const cart = new Set(store.get(CART_KEY, []).filter(id => isKnown(id) && !owned.has(id)));
+const isOwned = id => FREE || owned.has(id);
+const cards = [];
+let fType = 'all', fCat = 'all';
+const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { const c = cards.find(c => c.root === e.target); if (c) c.visible = e.isIntersecting; }), { rootMargin: '80px' }) : null;
+const cartDlg = $('#cart'), detailDlg = $('#detail');
+
+function buildChips() {
+  const mk = (host, list, get, set) => list.forEach(([v, label]) => {
+    const b = el('button', 'chip', label); b.type = 'button'; b.setAttribute('aria-pressed', String(get() === v));
+    b.onclick = () => { set(v); [...host.children].forEach(c => c.setAttribute('aria-pressed', String(c === b))); applyFilter(); };
+    host.append(b);
+  });
+  mk($('#typeChips'), [['all', 'All'], ['live', 'Live'], ['static', 'Static'], ['owned', 'Owned']], () => fType, v => fType = v);
+  mk($('#catChips'), [['all', 'Every category'], ...[...new Set(ITEMS.map(i => i.cat))].map(c => [c, c])], () => fCat, v => fCat = v);
+}
+function buildGrid() {
+  const grid = $('#grid');
+  ITEMS.forEach(it => {
+    const root = el('article', 'card'); root.style.setProperty('--glow', palById(it.pal).c[2]);
+    const scr = el('button', 'card-screen'); scr.type = 'button'; scr.setAttribute('aria-label', 'Show details for ' + it.name);
+    const cv = el('canvas'); cv.width = CARD_W; cv.height = CARD_H;
+    const own = el('span', 'pill owned', 'Owned'); own.hidden = true;
+    scr.append(cv, own);
+    scr.onclick = () => openDetail(it);
+    const priceEl = el('span', 'price', price(it.price));
+    const top = el('div', 'card-top'); top.append(el('h3', '', it.name), priceEl);
+    const bot = el('div', 'card-bottom'); const act = el('div', 'row');
+    const add = el('button', 'btn small'); add.type = 'button'; add.onclick = () => isOwned(it.id) ? editItem(it, c.offset + cardClock * BASE_SPEED) : toggleCart(it.id);
+    const edit = el('button', 'link', 'Try in Studio'); edit.type = 'button'; edit.setAttribute('aria-label', 'Try ' + it.name + ' in the Studio'); edit.onclick = () => editItem(it, c.offset + cardClock * BASE_SPEED);
+    act.append(add, edit); bot.append(el('span', 'cat', it.cat), act);
+    root.append(scr, top, bot); grid.append(root);
+    const c = { it, root, add, edit, own, priceEl, ctx: cv.getContext('2d'), cfg: itemCfg(it), offset: 6 + it.seed, visible: true, ready: false, last: -1 };
+    cards.push(c); c.ready = drawMini(c.ctx, c.cfg, c.offset); if (io) io.observe(root);
+  });
+  syncCart();
+}
+function applyFilter() {
+  let n = 0;
+  cards.forEach(c => {
+    const typeOk = fType === 'all' || (fType === 'owned' ? isOwned(c.it.id) : (fType === 'live') === c.it.live);
+    const ok = typeOk && (fCat === 'all' || fCat === c.it.cat); c.root.hidden = !ok; if (ok) n++;
+  });
+  $('#galCount').textContent = n === 1 ? '1 wallpaper' : n + ' wallpapers';
+  $('#gridEmpty').textContent = fType === 'owned' && !owned.size ? 'You do not own any wallpapers yet. Add one to the cart and unlock it.' : 'No wallpaper matches this selection. Try another category.';
+  $('#gridEmpty').hidden = n > 0;
+}
+/* Card scheduler: every card on screen is redrawn on every frame when the device keeps up. One frame draws at most
+   CARD_PER_FRAME cards, the ones waiting longest first, so the cost has a ceiling however many cards are on screen.
+   The phase comes from one shared clock, so a card that skipped frames is still exactly where it should be. */
+const CARD_PER_FRAME = IS_PHONE ? 4 : 8;
+let cardClock = 0;
+function cardsTick(dt) {
+  if (!GL_OK) return;
+  cardClock += dt;
+  const due = [], gap = frameGap();
+  for (const c of cards) {
+    if (c.root.hidden) continue;
+    if (!c.ready) { due.push(c); continue; }                    /* first real frame still missing */
+    if (reduced || !c.visible) continue;
+    if (cardClock - c.last >= gap) due.push(c);
+  }
+  if (!due.length) return;
+  due.sort((a, b) => a.last - b.last);
+  const n = Math.min(gov.half ? CARD_PER_FRAME / 2 : CARD_PER_FRAME, due.length);
+  for (let i = 0; i < n; i++) {
+    const c = due[i]; c.last = cardClock;
+    if (drawMini(c.ctx, c.cfg, c.offset + (reduced ? 0 : cardClock * BASE_SPEED))) c.ready = true;
+  }
+}
+function syncCards() {
+  cards.forEach(c => {
+    const o = isOwned(c.it.id), inC = cart.has(c.it.id);
+    c.own.hidden = !o || FREE; c.priceEl.textContent = FREE ? '' : o ? 'Owned' : price(c.it.price);
+    c.add.textContent = o ? 'Customize' : inC ? 'In cart' : 'Add to cart';
+    c.add.classList.toggle('primary', o);
+    if (o) c.add.removeAttribute('aria-pressed'); else c.add.setAttribute('aria-pressed', String(inC));
+    c.edit.hidden = o;
+  });
+}
+
+/* ================= cart and checkout (demo: nothing is charged) ================= */
+let cartMode = 'cart', payStep = 0, unlockedNow = [];
+function toggleCart(id) {
+  if (isOwned(id)) return;
+  cart.has(id) ? cart.delete(id) : cart.add(id); store.set(CART_KEY, [...cart]); payStep = 0; cartMode = 'cart'; syncCart();
+}
+function syncCart() {
+  $('#cartCount').textContent = cart.size;
+  syncCards(); refreshDetail(); if (studio.built) studio.sync();
+  const list = $('#cartList'), foot = $('#cartFoot'); list.textContent = '';
+  if (cartMode === 'done') {
+    const n = unlockedNow.length, first = ITEMS.find(i => i.id === unlockedNow[0]);
+    const box = el('div', 'done');
+    box.append(el('h3', '', n === 1 ? 'Wallpaper unlocked' : n + ' wallpapers unlocked'),
+      el('p', 'hint', 'Demo mode. Nothing was charged.'));
+    const row = el('div', 'row');
+    const open = el('button', 'btn primary', 'Customize ' + (first ? first.name : ''));
+    open.type = 'button'; open.onclick = () => { cartDlg.close(); if (first) editItem(first); };
+    const keep = el('button', 'btn', 'Keep browsing'); keep.type = 'button'; keep.onclick = () => softClose(cartDlg);
+    row.append(open, keep); box.append(row); list.append(box); foot.hidden = true; return;
+  }
+  foot.hidden = false;
+  const items = ITEMS.filter(i => cart.has(i.id));
+  if (!items.length) list.append(el('p', 'empty', 'Your cart is empty.'));
+  items.forEach(it => {
+    const row = el('div', 'cart-item'); const cv = el('canvas'); cv.width = 192; cv.height = 108;
+    const paint = () => { if (!drawMini(cv.getContext('2d'), itemCfg(it), 6 + it.seed) && GL_OK && cv.isConnected !== false) setTimeout(paint, 200); }; paint();
+    const d = el('div'); d.append(el('strong', '', it.name), el('small', '', price(it.price)));
+    const rm = el('button', 'link', 'Remove'); rm.type = 'button'; rm.setAttribute('aria-label', 'Remove ' + it.name + ' from the cart'); rm.onclick = () => toggleCart(it.id);
+    row.append(cv, d, rm); list.append(row);
+  });
+  $('#cartTotal').textContent = money(items.reduce((s, i) => s + i.price, 0));
+  $('#cartPay').disabled = !items.length; $('#cartPay').textContent = payStep ? 'Unlock in demo mode' : 'Continue to payment';
+  const note = $('#cartNote'); note.hidden = !payStep || !items.length;
+  note.textContent = 'Payments are not connected yet. Nothing is charged.';
+}
+$('#cartOpen').onclick = () => { syncCart(); cartDlg.showModal(); };
+$('#cartClose').onclick = () => softClose(cartDlg);
+cartDlg.addEventListener('close', () => { if (cartMode === 'done' || payStep) { cartMode = 'cart'; payStep = 0; syncCart(); } });
+$('#cartPay').onclick = () => {
+  if (!cart.size) return;
+  if (!payStep) { payStep = 1; syncCart(); return; }
+  const ids = [...cart]; ids.forEach(id => owned.add(id)); cart.clear();
+  store.set(OWN_KEY, [...owned]); store.set(CART_KEY, []);
+  unlockedNow = ids; cartMode = 'done'; payStep = 0; syncCart(); applyFilter();
+};
+/* dialogs fade out before they close */
+function softClose(d) {
+  if (!d.open || d.classList.contains('closing')) return;
+  if (reduced) { d.close(); return; }
+  d.classList.add('closing'); setTimeout(() => { d.classList.remove('closing'); if (d.open) d.close(); }, 270);
+}
+[cartDlg, detailDlg].forEach(d => {
+  d.addEventListener('click', e => { if (e.target === d) softClose(d); });
+  d.addEventListener('cancel', e => { e.preventDefault(); softClose(d); });
+  d.addEventListener('close', () => d.classList.remove('closing'));
+});
+function openCart() { syncCart(); if (!cartDlg.open) cartDlg.showModal(); }
+
+/* ================= sideways browsing inside an open wallpaper ================= */
+/* A finger drag moves the picture along; past a threshold the next wallpaper slides in from the other side. */
+function swipeable(host, target, step) {
+  let x0 = null, y0 = 0, dx = 0, pid = null, horiz = null, busy = false;
+  const set = (x, o, anim) => { target.style.transition = anim ? 'transform .4s cubic-bezier(.22,.8,.24,1), opacity .4s' : 'none'; target.style.transform = x ? 'translateX(' + x + 'px)' : ''; target.style.opacity = o === 1 ? '' : String(o); };
+  const go = dir => {
+    if (busy) return; busy = true; const w = host.clientWidth || 300;
+    set(-dir * w * .35, 0, true);
+    setTimeout(() => { step(dir); set(dir * w * .35, 0, false); void target.offsetWidth; set(0, 1, true); setTimeout(() => { busy = false; }, 400); }, 300);
+  };
+  host.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' || busy || e.target.closest('button')) return; x0 = e.clientX; y0 = e.clientY; dx = 0; horiz = null; pid = e.pointerId; });
+  host.addEventListener('pointermove', e => {
+    if (x0 == null || e.pointerId !== pid) return;
+    const ddx = e.clientX - x0, ddy = e.clientY - y0;
+    if (horiz == null && Math.hypot(ddx, ddy) > 8) horiz = Math.abs(ddx) > Math.abs(ddy) * 1.2;
+    if (!horiz) return; dx = ddx; set(dx * .6, 1 - Math.min(.7, Math.abs(dx) / (host.clientWidth || 300)), false);
+  });
+  const end = cancel => () => {
+    if (x0 == null) return; x0 = null;
+    if (!cancel && horiz && Math.abs(dx) > Math.min(70, host.clientWidth * .18)) go(dx < 0 ? 1 : -1); else if (horiz) set(0, 1, true);
+  };
+  host.addEventListener('pointerup', end(false)); host.addEventListener('pointercancel', end(true));
+  return go;
+}
+const wrapIdx = i => (i + ITEMS.length) % ITEMS.length;
+
+/* ================= detail ================= */
+/* the detail view and the Studio draw a fixed number of pixels while moving, and the full resolution when still */
+const DETAIL_PX = IS_PHONE ? 240000 : 600000, STUDIO_PX = IS_PHONE ? 220000 : 650000, STUDIO_FULL_PX = IS_PHONE ? 420000 : 1000000, STUDIO_STILL_PX = IS_PHONE ? 600000 : 1600000;
+let detailItem = null, detailStage = null, detailPhase = 0, detailAcc = 0;
+function refreshDetail() {
+  if (!detailItem) return;
+  const o = isOwned(detailItem.id);
+  $('#dPrice').textContent = o ? 'Owned' : price(detailItem.price); $('#dPrice').hidden = FREE;
+  $('#dCart').textContent = o ? 'Customize' : cart.has(detailItem.id) ? 'Remove from cart' : 'Add to cart';
+  $('#dEdit').hidden = o;
+}
+/* opens at the moment of the loop its gallery card is showing, so the picture does not jump */
+function openDetail(it) {
+  detailItem = it; detailPhase = 6 + it.seed + cardClock * BASE_SPEED;
+  $('#dName').textContent = it.name;
+  refreshDetail();
+  if (!detailDlg.open) detailDlg.showModal();
+  const cv = $('#detailCanvas'); if (!detailStage) detailStage = new Stage(cv, { async: true });
+  fitCanvasPx(cv, DETAIL_PX); if (detailStage.draw(itemCfg(it), detailPhase) === false && !detailStage.gl) paintFallback(cv, palById(it.pal).c);
+}
+$('#dClose').onclick = () => softClose(detailDlg);
+const detailGo = swipeable($('#dScreen'), $('#detailCanvas'), d => { if (detailItem) openDetail(ITEMS[wrapIdx(ITEMS.indexOf(detailItem) + d)]); });
+$('#dPrev').onclick = () => detailGo(-1); $('#dNext').onclick = () => detailGo(1);
+detailDlg.addEventListener('keydown', e => { if (e.target.closest('input,select,textarea')) return; if (e.key === 'ArrowLeft') detailGo(-1); else if (e.key === 'ArrowRight') detailGo(1); });
+$('#dCart').onclick = () => {
+  if (!detailItem) return;
+  if (isOwned(detailItem.id)) { const it = detailItem, ph = detailPhase; detailDlg.close(); editItem(it, ph); } else toggleCart(detailItem.id);
+};
+$('#dEdit').onclick = () => { const it = detailItem, ph = detailPhase; detailDlg.close(); if (it) editItem(it, ph); };
+detailDlg.addEventListener('close', () => { detailItem = null; });
+function detailTick(dt) {
+  if (!detailItem || !detailStage || !detailStage.gl) return;
+  if (!reduced) detailPhase += dt * BASE_SPEED;
+  detailAcc += dt; if (detailAcc < frameGap()) return; detailAcc = 0;
+  fitCanvasPx($('#detailCanvas'), DETAIL_PX); detailStage.draw(itemCfg(detailItem), detailPhase);
+}
+
+/* ================= studio ================= */
+const clockR = makeClockRenderer();
+const PERF = { balanced: { fps: 30, q: 100 }, saver: { fps: 20, q: 50 }, sharp: { fps: 60, q: 250 } };
+const DEF = {
+  title: 'My wallpaper', base: null, fx: 'aura', pal: 'aura', colors: PAL[0].c.slice(), speed: BASE_SPEED, scale: 1, intensity: 1, grain: .55, vignette: .45, seed: 3,
+  clock: { on: false, kind: 'digital', dStyle: 'thin', aStyle: 'minimal', x: .5, y: .45, size: 18, color: '#ffffff', accent: null, seconds: false, h24: true, smooth: true, date: true },
+  text: '', pos: 'bc', tsize: 4, res: '3840x2160', fmt: 'png', fxOver: .8, perf: 'balanced', motion: 'anim', loop: LOOP, frame: .35
+};
+const stored = store.get(STUDIO_KEY, {});
+const S = Object.assign({}, DEF, stored);
+/* designs saved before wallpapers were slowed down keep their look: their speed is scaled once */
+if (stored.v !== 2 && typeof stored.speed === 'number') S.speed = Math.round(stored.speed * BASE_SPEED * 20) / 20;
+S.v = 2;
+S.clock = Object.assign({}, DEF.clock, S.clock && typeof S.clock === 'object' ? S.clock : {});
+S.clock.on = false; /* the clock is switched off for now */
+const HEX = /^#[0-9a-f]{6}$/i;
+if (!FX[S.fx]) S.fx = DEF.fx;
+if (!PERF[S.perf]) S.perf = DEF.perf;
+if (!['anim', 'still'].includes(S.motion)) S.motion = 'anim';
+const num = (v, a, b, d) => typeof v === 'number' && isFinite(v) ? Math.min(b, Math.max(a, v)) : d;
+S.loop = num(S.loop, 8, 40, LOOP); S.frame = num(S.frame, 0, 1, DEF.frame); S.speed = num(S.speed, .1, 2, BASE_SPEED);
+if (!document.querySelector('#sRes option[value="' + S.res + '"]')) S.res = DEF.res;
+if (!Array.isArray(S.colors) || S.colors.length !== 4 || S.colors.some(c => !HEX.test(c))) S.colors = DEF.colors.slice();
+if (S.base && !isKnown(S.base)) S.base = null;
+if (!['bc', 'bl', 'br', 'tc', 'tl', 'tr'].includes(S.pos)) S.pos = DEF.pos;
+if (typeof S.text !== 'string') S.text = '';
+if (typeof S.tsize !== 'number') S.tsize = DEF.tsize;
+(() => {
+  const C = S.clock;
+  if (!['digital', 'analog'].includes(C.kind)) C.kind = 'digital';
+  if (!clockR.digital.some(s => s[0] === C.dStyle)) C.dStyle = DEF.clock.dStyle;
+  if (!clockR.analog.some(s => s[0] === C.aStyle)) C.aStyle = DEF.clock.aStyle;
+  ['x', 'y', 'size'].forEach(k => { if (typeof C[k] !== 'number' || !isFinite(C[k])) C[k] = DEF.clock[k]; });
+  if (!HEX.test(C.color)) C.color = DEF.clock.color;
+  if (C.accent && !HEX.test(C.accent)) C.accent = null;
+})();
+let studioImage = null;
+const sCfg = () => ({ fx: S.fx, colors: S.colors, speed: S.speed, loop: S.loop, scale: S.scale, intensity: S.intensity, grain: S.grain, vignette: S.vignette, seed: S.seed, image: studioImage, fxOver: S.fxOver });
+const clockCfg = () => Object.assign({}, S.clock, { accent: S.clock.accent || S.colors[2] });
+const textCfg = () => ({ text: S.text.trim(), pos: S.pos, size: S.tsize });
+const resWH = () => S.res.split('x').map(Number);
+const baseItem = () => S.base ? ITEMS.find(i => i.id === S.base) : null;
+const locked = () => { const b = baseItem(); return !!b && !isOwned(b.id); };
+
+const studio = {
+  stage: null, phase: 5, playing: true, dirty: true, ovDirty: true, ovKey: '', box: null, drag: null,
+  thumbs: [], cThumbs: [], styleKind: '', licSig: '', thumbTimer: 0, cTimer: 0, saveTimer: 0, built: false, acc: 0, onScreen: true, ar: '', palKey: '',
+  enter() { if (!this.built) this.build(); setAccent(S.colors[2]); this.dirty = true; this.ovDirty = true; this.sync(); setTimeout(() => loadJSZip().catch(() => {}), 2500); },
+  build() {
+    this.built = true; this.stage = new Stage($('#studioCanvas'), { async: true, power: 'default' });
+    const fxGrid = $('#fxGrid');
+    FX_IDS.forEach(id => {
+      const b = el('button', 'fx'); b.type = 'button'; b.dataset.fx = id; const cv = el('canvas'); cv.width = 240; cv.height = 135;
+      b.append(cv, el('span', '', FX[id].name)); b.onclick = () => { S.fx = id; this.changed(); };
+      fxGrid.append(b); this.thumbs.push({ id, ctx: cv.getContext('2d') });
+    });
+    const palRow = $('#palRow');
+    PAL.forEach(p => {
+      const b = el('button', 'pal'); b.type = 'button'; b.dataset.pal = p.id; b.title = p.name; b.setAttribute('aria-label', p.name + ' palette');
+      b.style.background = 'linear-gradient(90deg,' + p.c.join(',') + ')';
+      b.onclick = () => { S.pal = p.id; S.colors = p.c.slice(); this.changed(true, true); };
+      palRow.append(b);
+    });
+    [0, 1, 2, 3].forEach(i => $('#sC' + i).addEventListener('input', e => { S.colors[i] = e.target.value; S.pal = 'custom'; this.changed(true, true); }));
+    const bind = (id, key, num) => $('#' + id).addEventListener('input', e => { S[key] = num ? +e.target.value : (e.target.type === 'checkbox' ? e.target.checked : e.target.value); this.changed(); });
+    bind('sSpeed', 'speed', 1); bind('sLoop', 'loop', 1); bind('sFrame', 'frame', 1); bind('sScale', 'scale', 1);
+    $('#mAnim').onclick = () => { S.motion = 'anim'; this.setPlaying(true); this.changed(); };
+    $('#mStill').onclick = () => { S.motion = 'still'; S.frame = (((this.phase / S.loop) % 1) + 1) % 1; this.changed(); };
+    const sGo = swipeable($('#stage'), $('#studioCanvas'), d => { const b = baseItem(); loadTemplate(ITEMS[wrapIdx(b ? ITEMS.indexOf(b) + d : (d > 0 ? 0 : -1))]); });
+    $('#sPrev').onclick = () => sGo(-1); $('#sNext').onclick = () => sGo(1); bind('sInt', 'intensity', 1); bind('sGrain', 'grain', 1); bind('sVig', 'vignette', 1); bind('sFxOver', 'fxOver', 1);
+    bind('sText', 'text'); bind('sPos', 'pos'); bind('tSize', 'tsize', 1); bind('sRes', 'res'); bind('sFmt', 'fmt'); bind('sPerf', 'perf'); bind('sTitle', 'title');
+    const bindC = (id, key, type, thumbs) => $('#' + id).addEventListener('input', e => {
+      S.clock[key] = type === 'num' ? +e.target.value : type === 'bool' ? e.target.checked : e.target.value; this.changed(false, !!thumbs);
+    });
+    bindC('cOn', 'on', 'bool'); bindC('cSize', 'size', 'num'); bindC('cColor', 'color', 'str', true); bindC('cAccent', 'accent', 'str', true);
+    bindC('cSec', 'seconds', 'bool', true); bindC('c24', 'h24', 'bool'); bindC('cSmooth', 'smooth', 'bool'); bindC('cDate', 'date', 'bool');
+    $('#cX').addEventListener('input', e => { S.clock.x = +e.target.value / 100; this.changed(); });
+    $('#cY').addEventListener('input', e => { S.clock.y = +e.target.value / 100; this.changed(); });
+    $('#cCenter').onclick = () => { S.clock.x = .5; S.clock.y = .5; this.changed(); };
+    $('#cAccentAuto').onclick = () => { S.clock.accent = null; this.changed(false, true); };
+    $('#cDigital').onclick = () => { S.clock.kind = 'digital'; this.changed(false, true); };
+    $('#cAnalog').onclick = () => { S.clock.kind = 'analog'; this.changed(false, true); };
+    $('#panel').addEventListener('submit', e => e.preventDefault());
+    $('#sShuffle').onclick = () => { S.seed = Math.round(Math.random() * 9999) / 100; this.changed(true); };
+    $('#sRandom').onclick = () => {
+      const r = (a, b) => Math.round((a + Math.random() * (b - a)) * 20) / 20; const p = PAL[Math.floor(Math.random() * PAL.length)];
+      Object.assign(S, { base: null, title: 'My wallpaper', fx: FX_IDS[Math.floor(Math.random() * FX_IDS.length)], pal: p.id, colors: p.c.slice(), seed: Math.round(Math.random() * 9999) / 100, scale: r(.7, 1.5), speed: r(.2, .7), intensity: r(.8, 1.2), grain: r(.4, .9) });
+      this.changed(true, true);
+    };
+    $('#sScratch').onclick = () => {
+      Object.assign(S, { base: null, title: 'My wallpaper', fx: DEF.fx, pal: DEF.pal, colors: DEF.colors.slice(), speed: BASE_SPEED, loop: LOOP, scale: 1, intensity: 1, grain: DEF.grain, vignette: .45, seed: 3 });
+      studioImage = null; this.changed(true, true);
+    };
+    $('#sPlay').onclick = () => this.setPlaying(!this.playing);
+    $('#sFull').onclick = toggleFull;
+    /* a wallpaper that has left the screen keeps its time but is not drawn */
+    if ('IntersectionObserver' in window) new IntersectionObserver(es => { this.onScreen = es[es.length - 1].isIntersecting; if (this.onScreen) this.dirty = true; }).observe($('#stage'));
+    addEventListener('pagehide', () => store.set(STUDIO_KEY, S));
+    $('#sImg').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) this.loadImage(f); });
+    $('#sImgRemove').onclick = () => { studioImage = null; this.changed(true); };
+    this.bindDrag();
+  },
+  setPlaying(on) { this.playing = on; const b = $('#sPlay'); b.toggleAttribute('data-on', !on); b.setAttribute('aria-label', on ? 'Pause' : 'Play'); },
+  /* dragging the clock on the preview */
+  bindDrag() {
+    const ov = $('#overlayCanvas');
+    const toPx = e => { const r = ov.getBoundingClientRect(); return { x: (e.clientX - r.left) * ov.width / r.width, y: (e.clientY - r.top) * ov.height / r.height, k: ov.width / r.width }; };
+    const hit = p => { const b = this.box; if (!b) return false; const pad = Math.max(b.m, 10 * p.k); return p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad; };
+    ov.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const p = toPx(e), b = this.box; if (!b || !hit(p)) return;
+      this.drag = { dx: p.x - (b.x + b.w / 2), dy: p.y - (b.y + b.h / 2) };
+      try { ov.setPointerCapture(e.pointerId); } catch (err) {}
+      ov.classList.add('dragging'); e.preventDefault();
+    });
+    ov.addEventListener('pointermove', e => {
+      const p = toPx(e);
+      if (this.drag) this.moveTo(p.x - this.drag.dx, p.y - this.drag.dy); else ov.classList.toggle('drag', hit(p));
+    });
+    const end = () => { if (this.drag) { this.drag = null; ov.classList.remove('dragging'); } };
+    ov.addEventListener('pointerup', end); ov.addEventListener('pointercancel', end);
+    ov.addEventListener('pointerleave', () => { if (!this.drag) ov.classList.remove('drag'); });
+    ov.addEventListener('keydown', e => {
+      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; if (!d || !S.clock.on) return;
+      const st = e.shiftKey ? .05 : .01, C = S.clock;
+      C.x = Math.min(1, Math.max(0, Math.round((C.x + d[0] * st) * 1000) / 1000)); C.y = Math.min(1, Math.max(0, Math.round((C.y + d[1] * st) * 1000) / 1000));
+      e.preventDefault(); this.changed();
+    });
+  },
+  moveTo(cx, cy) {
+    const b = this.box, ov = $('#overlayCanvas'); if (!b) return;
+    const W = ov.width, H = ov.height, lx = (b.w / 2 + b.m) / W, ly = (b.h / 2 + b.m) / H;
+    let fx = lx >= .5 ? .5 : Math.min(Math.max(cx / W, lx), 1 - lx), fy = ly >= .5 ? .5 : Math.min(Math.max(cy / H, ly), 1 - ly);
+    if (Math.abs(fx - .5) < .012) fx = .5; if (Math.abs(fy - .5) < .012) fy = .5;   // snaps to the center lines
+    S.clock.x = Math.round(fx * 1000) / 1000; S.clock.y = Math.round(fy * 1000) / 1000; this.changed();
+  },
+  loadImage(file) {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 3840 / Math.max(im.naturalWidth, im.naturalHeight));
+      const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(im.naturalWidth * k)); cv.height = Math.max(1, Math.round(im.naturalHeight * k));
+      cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+      studioImage = cv; this.changed(true); status('Image uploaded. The effect is projected over it.');
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); status('This file could not be read as an image. Try a JPG or PNG.', true); };
+    im.src = url;
+  },
+  changed(thumbs, cthumbs) {
+    this.dirty = true; this.ovDirty = true; this.sync();
+    clearTimeout(this.saveTimer); this.saveTimer = setTimeout(() => store.set(STUDIO_KEY, S), 300);   /* saving on every slider step would make dragging stutter */
+    if (thumbs) { clearTimeout(this.thumbTimer); this.thumbTimer = setTimeout(() => this.drawThumbs(), 120); }
+    if (cthumbs) { clearTimeout(this.cTimer); this.cTimer = setTimeout(() => this.drawClockThumbs(), 80); }
+  },
+  drawThumbs() {
+    const base = sCfg(); let missing = false;
+    this.thumbs.forEach(t => { if (!drawMini(t.ctx, Object.assign({}, base, { fx: t.id, image: null }), 20)) missing = true; });
+    if (missing && GL_OK) { clearTimeout(this.thumbTimer); this.thumbTimer = setTimeout(() => this.drawThumbs(), 200); }   /* shaders still compiling */
+  },
+  buildClockStyles() {
+    const host = $('#cStyles'), kind = S.clock.kind; host.textContent = ''; this.cThumbs = []; this.styleKind = kind;
+    clockR[kind].forEach(([id, name]) => {
+      const b = el('button', 'fx'); b.type = 'button'; b.dataset.cs = id; const cv = el('canvas'); cv.width = 240; cv.height = 135;
+      b.append(cv, el('span', '', name));
+      b.onclick = () => { S.clock[kind === 'digital' ? 'dStyle' : 'aStyle'] = id; this.changed(false, false); };
+      host.append(b); this.cThumbs.push({ id, ctx: cv.getContext('2d') });
+    });
+    this.drawClockThumbs();
+  },
+  drawClockThumbs() {
+    const kind = S.clock.kind, when = new Date(2026, 9, 8, 10, 8, 35, 0), c = S.colors;
+    this.cThumbs.forEach(t => {
+      const x = t.ctx, W = x.canvas.width, H = x.canvas.height, g = x.createLinearGradient(0, H, W, 0);
+      g.addColorStop(0, c[0]); g.addColorStop(1, c[1]); x.fillStyle = g; x.fillRect(0, 0, W, H);
+      const cfg = Object.assign(clockCfg(), { on: true, kind, x: .5, y: .5, date: false, smooth: false, h24: true, seconds: kind === 'analog', size: kind === 'digital' ? 34 : 28 });
+      cfg[kind === 'digital' ? 'dStyle' : 'aStyle'] = t.id; clockR.draw(x, W, H, cfg, null, when);
+    });
+  },
+  syncLicence() {
+    if (FREE) { $('#licence').hidden = true; return; }
+    const b = baseItem(), lic = $('#licence'), lk = locked();
+    const sig = [b && b.id, lk, b && cart.has(b.id)].join('|'); if (sig === this.licSig) return; this.licSig = sig;
+    lic.textContent = ''; lic.hidden = !b; if (!b) return;
+    lic.classList.toggle('ok', !lk);
+    if (!lk) { const p = el('p'); p.append(el('strong', '', b.name + ' is yours.')); lic.append(p); return; }
+    const p = el('p'); p.append(el('strong', '', b.name), document.createTextNode(' · ' + price(b.price) + ' to download'));
+    const act = el('button', 'btn primary small', cart.has(b.id) ? 'Open cart' : 'Add to cart'); act.type = 'button';
+    act.onclick = () => { if (!cart.has(b.id)) toggleCart(b.id); openCart(); };
+    lic.append(p, act);
+  },
+  sync() {
+    const set = (id, v) => {
+      const e = $('#' + id);
+      if (e.type === 'checkbox') e.checked = !!v; else if (document.activeElement !== e || e.type !== 'text') e.value = v;
+      if (e.type === 'range') { const p = ((e.value - e.min) / ((e.max - e.min) || 1)).toFixed(4); if (e.__p !== p) { e.__p = p; e.style.setProperty('--p', p); } }
+    };
+    /* this runs on every slider step, so it only touches what really changed */
+    const txt = (id, t) => { const e = $('#' + id); if (e.textContent !== t) e.textContent = t; };
+    const C = S.clock, pct = v => Math.round(v * 100) + '%';
+    set('sTitle', S.title); set('sSpeed', S.speed); set('sScale', S.scale); set('sInt', S.intensity); set('sGrain', S.grain); set('sVig', S.vignette); set('sFxOver', S.fxOver);
+    set('sText', S.text); set('sPos', S.pos); set('tSize', S.tsize); set('sRes', S.res); set('sFmt', S.fmt); set('sPerf', S.perf);
+    S.colors.forEach((c, i) => set('sC' + i, c));
+    set('cOn', C.on); set('cSize', C.size); set('cColor', C.color); set('cAccent', C.accent || S.colors[2]); set('cSec', C.seconds); set('c24', C.h24); set('cSmooth', C.smooth); set('cDate', C.date);
+    set('cX', Math.round(C.x * 100)); set('cY', Math.round(C.y * 100));
+    const still = S.motion === 'still';
+    set('sLoop', S.loop); set('sFrame', S.frame);
+    txt('sLoopO', Math.round(S.loop / S.speed) + ' s'); txt('sFrameO', pct(S.frame));
+    $('#mAnim').setAttribute('aria-pressed', String(!still)); $('#mStill').setAttribute('aria-pressed', String(still));
+    $('#sFrameRow').hidden = !still; $('#sLoopRow').hidden = still; $('#sSpeedRow').hidden = still; $('#sPlay').hidden = still; $('#xVid').hidden = still;
+    txt('sSpeedO', S.speed.toFixed(2) + '×'); txt('sScaleO', S.scale.toFixed(2) + '×');
+    txt('sIntO', pct(S.intensity)); txt('sGrainO', pct(S.grain)); txt('sVigO', pct(S.vignette)); txt('sFxOverO', pct(S.fxOver));
+    txt('tSizeO', S.tsize + '%'); txt('cSizeO', C.size + '%'); txt('cXO', pct(C.x)); txt('cYO', pct(C.y));
+    $('#cBody').hidden = !C.on;
+    $('#cDigital').setAttribute('aria-pressed', String(C.kind === 'digital')); $('#cAnalog').setAttribute('aria-pressed', String(C.kind === 'analog'));
+    $('#cH24Row').hidden = C.kind !== 'digital'; $('#cSmoothRow').hidden = !(C.kind === 'analog' && C.seconds); $('#cAccentAuto').hidden = !C.accent;
+    if (this.styleKind !== C.kind) this.buildClockStyles();
+    const cur = C.kind === 'digital' ? C.dStyle : C.aStyle;
+    document.querySelectorAll('#cStyles .fx').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cs === cur)));
+    document.querySelectorAll('#fxGrid .fx').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.fx === S.fx)));
+    document.querySelectorAll('#palRow .pal').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pal === S.pal)));
+    $('#sImgRemove').hidden = !studioImage; $('#sFxOverRow').hidden = !studioImage;
+    const [w, h] = resWH(), ar = (w / h).toFixed(4); if (this.ar !== ar) { this.ar = ar; $('#stage').style.setProperty('--ar', ar); }
+    $('#overlayCanvas').classList.toggle('touch', !!C.on);
+    this.syncLicence(); refreshExport(); setAccent(S.colors[2]);
+    /* the sliders are lit in the colors of the wallpaper */
+    const pk = S.colors.join(); if (this.palKey !== pk) { this.palKey = pk; [1, 2, 3].forEach(i => document.documentElement.style.setProperty('--w' + i, S.colors[i])); }
+    if (!this.thumbs.drawn) { this.thumbs.drawn = true; this.drawThumbs(); this.drawClockThumbs(); }
+  },
+  paintOverlay() {
+    const ov = $('#overlayCanvas'), r = ov.getBoundingClientRect(); if (!r.width) return;
+    const k = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(r.width * k), h = Math.round(r.height * k);
+    let resized = false; if (ov.width !== w || ov.height !== h) { ov.width = w; ov.height = h; resized = true; }
+    const C = S.clock, now = new Date(), smooth = C.on && C.kind === 'analog' && C.smooth && C.seconds;
+    const key = (C.on || S.text.trim()) ? (smooth ? Math.floor(now.getTime() / 33) : Math.floor(now.getTime() / 1000)) : -1;
+    if (!resized && !this.ovDirty && key === this.ovKey) return;
+    this.ovKey = key; this.ovDirty = false;
+    const x = ov.getContext('2d'); x.clearRect(0, 0, w, h); this.box = clockR.draw(x, w, h, clockCfg(), textCfg(), now);
+  },
+  tick(dt) {
+    if (!this.built) return;
+    const cv = $('#studioCanvas'), moving = S.motion !== 'still' && this.playing && !reduced;
+    if (S.motion === 'still') { const ph = S.frame * S.loop; if (ph !== this.phase) { this.phase = ph; this.dirty = true; } }
+    else if (moving) { this.phase = (this.phase + dt * S.speed) % S.loop; this.acc += dt; if (this.acc >= frameGap()) { this.acc = 0; this.dirty = true; } }
+    if (!this.onScreen) return;
+    const bw = cv.width, bh = cv.height; fitCanvasPx(cv, isFull() ? STUDIO_FULL_PX : moving ? STUDIO_PX : STUDIO_STILL_PX);
+    if (bw !== cv.width || bh !== cv.height) this.dirty = true;
+    this.paintOverlay();
+    if (!this.dirty) return;
+    const cfg = sCfg(), r = this.stage.draw(cfg, this.phase);
+    if (r === null) return;                                   /* shader still compiling: the old frame stays, try again next frame */
+    if (!r && !this.stage.gl) paintFallback(cv, cfg.colors);
+    this.dirty = false;
+  },
+};
+function applyTemplate(it) {
+  Object.assign(S, { title: it.name, base: it.id, fx: it.fx, pal: it.pal, colors: palById(it.pal).c.slice(), speed: BASE_SPEED, loop: it.loop || LOOP, scale: 1, intensity: 1,
+    grain: it.grain != null ? it.grain : .85, vignette: .45, seed: it.seed });
+  studioImage = null; store.set(STUDIO_KEY, S); studio.thumbs.drawn = false; studio.licSig = '';
+}
+/* phase: the moment of the loop the wallpaper was showing where it was opened from, so the Studio carries on from there */
+function editItem(it, phase) { applyTemplate(it); if (phase != null) studio.phase = ((phase % S.loop) + S.loop) % S.loop; go('studio'); }
+/* swiping on the Studio preview: the next wallpaper from the catalogue, with the motion setting kept */
+function loadTemplate(it) { applyTemplate(it); studio.changed(true, false); }
+
+/* ================= full screen ================= */
+/* Real full screen where the browser allows it. Phones and app views usually refuse, so there the wallpaper fills the whole
+   page instead. Either way it is drawn for the shape of the screen it is on, the way it will run as a wallpaper. */
+const stageEl = $('#stage');
+let pseudoFull = false, idleTimer = 0;
+const nativeFull = () => (document.fullscreenElement || document.webkitFullscreenElement) === stageEl;
+const isFull = () => pseudoFull || nativeFull();
+/* in full screen the controls fade away after a moment and come back on a tap */
+function wake() {
+  clearTimeout(idleTimer); stageEl.classList.remove('idle');
+  if (isFull()) idleTimer = setTimeout(() => stageEl.classList.add('idle'), 2600);
+}
+function fullSync() {
+  const f = isFull(), b = $('#sFull');
+  stageEl.classList.toggle('is-full', f); document.body.classList.toggle('full-on', pseudoFull);
+  b.toggleAttribute('data-on', f); b.setAttribute('aria-label', f ? 'Exit full screen' : 'Full screen');
+  wake(); studio.dirty = true;
+}
+function setPseudo(on) { pseudoFull = on; fullSync(); }
+function toggleFull() {
+  if (pseudoFull) { setPseudo(false); return; }
+  if (nativeFull()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+  const req = stageEl.requestFullscreen || stageEl.webkitRequestFullscreen;
+  if (!req) { setPseudo(true); return; }
+  let p = null; try { p = req.call(stageEl); } catch (e) { setPseudo(true); return; }
+  if (p && p.then) p.catch(() => setPseudo(true));
+  else setTimeout(() => { if (!isFull()) setPseudo(true); }, 350);
+}
+['fullscreenchange', 'webkitfullscreenchange'].forEach(n => document.addEventListener(n, fullSync));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && pseudoFull) setPseudo(false); });
+stageEl.addEventListener('pointerdown', wake, true);
+stageEl.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' && isFull()) wake(); });
+
+/* ================= export ================= */
+const xStatus = $('#xStatus'), xProg = $('#xProg');
+function status(msg, err) { xStatus.textContent = msg; xStatus.classList.toggle('err', !!err); }
+let exportBusy = false;
+function refreshExport() { const lk = locked(); ['xLV', 'xWE', 'xDS', 'xImg', 'xVid'].forEach(id => { $('#' + id).disabled = exportBusy || lk; }); }
+const busy = b => { exportBusy = b; refreshExport(); };
+const slug = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'wallpaper';
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+const hasClaude = !!(window.claude && typeof window.claude.use === 'function');
+
+async function saveFile(filename, blob) {
+  if (hasClaude) {
+    const dl = await window.claude.use('downloads');
+    if (!dl) throw { code: 'unavailable' };
+    await dl.save({ filename, data: blob }); return;
+  }
+  const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = filename; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 5000);
+}
+function explain(e) {
+  const c = e && e.code;
+  if (c === 'declined') return 'You cancelled the download. Nothing was saved.';
+  if (c === 'rate_limited') return 'A confirmation is already open or there were too many. Wait a moment and try again.';
+  if (c === 'too_large') return 'The file is too large for this device. Pick a lower resolution or JPG.';
+  if (c === 'gl') return 'The graphics card cannot render this resolution. Pick a lower one.';
+  if (c === 'zip') return 'The ZIP library did not load. Reload the page and try again.';
+  if (c === 'video') return 'This browser cannot record video from a canvas. Use the Wallpaper Engine package or the image.';
+  if (c === 'unavailable' || c === 'not_granted' || c === 'capability_disabled' || c === 'capability_removed') return 'Downloads are not available here. Open the page directly in the Claude app.';
+  return 'The export failed' + (e && e.message ? ': ' + e.message : '.') + ' Try again.';
+}
+
+function renderStill(w, h, phase) {
+  const gcv = document.createElement('canvas'); gcv.width = w; gcv.height = h;
+  const st = new Stage(gcv, { preserve: true, power: 'high-performance' });
+  if (!st.gl || st.gl.drawingBufferWidth !== w || st.gl.drawingBufferHeight !== h || !st.draw(sCfg(), phase)) { st.destroy(); throw { code: 'gl' }; }
+  const out = document.createElement('canvas'); out.width = w; out.height = h; const x = out.getContext('2d');
+  x.drawImage(gcv, 0, 0); st.destroy(); clockR.draw(x, w, h, clockCfg(), textCfg(), new Date()); return out;
+}
+const toBlob = (cv, type, q) => new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej({ code: 'gl' }), type, q));
+
+async function exportImage() {
+  const [w, h] = resWH(); busy(true); status('Rendering ' + w + ' × ' + h + ' …');
+  try {
+    await nextFrame(); await nextFrame();
+    const cv = renderStill(w, h, studio.phase), jpg = S.fmt === 'jpg';
+    const blob = await toBlob(cv, jpg ? 'image/jpeg' : 'image/png', .95);
+    await saveFile(slug(S.title) + '-' + w + 'x' + h + (jpg ? '.jpg' : '.png'), blob);
+    status('The ' + w + ' × ' + h + ' image is ready, ' + (blob.size / 1048576).toFixed(1) + ' MB.');
+  } catch (e) { status(explain(e), true); } finally { busy(false); }
+}
+
+/* Runs inside the exported wallpaper (serialised with toString). Uses only CFG, FRAG, VERT, IMG.
+   Dreamscreen Lite engine:
+   - animated: a seamless loop at a capped frame rate and a fixed pixel budget, with a governor that backs off when the GPU is busy
+   - still: one sharp frame, drawn again only when the window or a setting changes, so the GPU is idle
+   Hosts (Wallpaper Engine, Lively, Dreamscreen Player) talk to it through wallpaperPropertyListener,
+   window.dreamscreen, or postMessage({ dreamscreen: 1, props, paused }). */
+function wallpaperRuntime() {
+  var c = document.getElementById('c'), o = { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'low-power' };
+  var gl = c.getContext('webgl', o) || c.getContext('experimental-webgl', o);
+  function rgb(a) { return 'rgb(' + a.map(function (v) { return Math.round(v * 255); }).join(',') + ')'; }
+  var colors = CFG.colors.map(function (a) { return a.slice(); });
+  var speed = CFG.speed, intensity = CFG.intensity, grain = CFG.grain, loop = CFG.loop || 20;
+  var animate = CFG.motion !== 'still', still = CFG.frame || 0, paused = false, hostFps = 0;
+  var phase = animate ? (CFG.phase || 0) % loop : still * loop;
+  var last = 0, raf = 0, hasImg = 0, imgAspect = 1, U = {}, stale = true;
+  var fpsCap = CFG.fps || 30, quality = CFG.quality || 100, gov = 1, ema = 0, nf = 0;
+  function fallback() { document.body.style.background = 'linear-gradient(45deg,' + colors.map(rgb).join(',') + ')'; }
+  if (!gl) fallback();
+  function size(sharp, w, h) {
+    var d = window.devicePixelRatio || 1, cw = w || c.clientWidth * d, ch = h || c.clientHeight * d;
+    /* a still frame is drawn once, so it may use the native resolution (up to 4K); a moving one keeps to the pixel budget */
+    var budget = sharp ? 8.3e6 * Math.max(.25, Math.min(1, quality / 100)) : 1e6 * quality / 100 * gov;
+    var k = w ? 1 : Math.min(1, Math.sqrt(budget / Math.max(1, cw * ch)));
+    var W = Math.max(2, Math.round(cw * k)), H = Math.max(2, Math.round(ch * k));
+    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+  }
+  /* per frame only the time (and the size, when it changed) is sent; everything else only after a setting changed */
+  var lastW = 0, lastH = 0;
+  function draw() {
+    var W = gl.drawingBufferWidth, H = gl.drawingBufferHeight;
+    if (W !== lastW || H !== lastH) { lastW = W; lastH = H; gl.viewport(0, 0, W, H); gl.uniform2f(U.u_res, W, H); }
+    if (stale) {
+      stale = false;
+      gl.uniform1f(U.u_loop, loop);
+      for (var i = 0; i < 4; i++) gl.uniform3f(U['u_c' + i], colors[i][0], colors[i][1], colors[i][2]);
+      gl.uniform1f(U.u_scale, CFG.scale); gl.uniform1f(U.u_int, intensity); gl.uniform1f(U.u_grain, grain); gl.uniform1f(U.u_vig, CFG.vignette);
+      gl.uniform1f(U.u_seed, CFG.seed); gl.uniform1f(U.u_fxOver, CFG.fxOver); gl.uniform1f(U.u_imgOn, hasImg); gl.uniform1f(U.u_imgAspect, imgAspect); gl.uniform1i(U.u_img, 0);
+    }
+    gl.uniform1f(U.u_time, phase);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  function frame(now) {
+    raf = 0; if (!animate || paused) return;
+    raf = requestAnimationFrame(frame);
+    var cap = hostFps > 0 ? Math.min(hostFps, fpsCap) : fpsCap, el = now - last;
+    if (el < 1000 / cap - 2) return;
+    var dt = Math.min(.1, el / 1000); last = now; phase = (phase + dt * speed) % loop;
+    ema = ema ? ema * .9 + Math.min(el, 250) * .1 : 1000 / cap;
+    if (++nf % 45 === 0) { if (ema > 1000 / cap * 1.35 && gov > .3) gov *= .85; else if (ema < 1000 / cap * 1.1 && gov < 1) gov = Math.min(1, gov * 1.06); }
+    size(false); draw();
+  }
+  /* starts the loop, or draws one frame and stops */
+  function refresh() {
+    if (!gl) return;
+    if (animate && !paused) { if (!raf) { last = performance.now(); size(false); draw(); raf = requestAnimationFrame(frame); } return; }
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    if (!animate) phase = still * loop;
+    size(!animate); draw();
+  }
+  if (gl) {
+    var mk = function (t, s) { var x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); return x; };
+    var pr = gl.createProgram(); gl.attachShader(pr, mk(gl.VERTEX_SHADER, VERT)); gl.attachShader(pr, mk(gl.FRAGMENT_SHADER, FRAG));
+    gl.bindAttribLocation(pr, 0, 'a'); gl.linkProgram(pr); gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    ['u_res', 'u_time', 'u_loop', 'u_c0', 'u_c1', 'u_c2', 'u_c3', 'u_scale', 'u_int', 'u_grain', 'u_vig', 'u_seed', 'u_imgOn', 'u_imgAspect', 'u_fxOver', 'u_img'].forEach(function (n) { U[n] = gl.getUniformLocation(pr, n); });
+    gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    if (IMG) { var im = new Image(); im.onload = function () {
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      imgAspect = im.width / im.height; hasImg = 1; stale = true; if (!animate || paused) refresh(); }; im.src = IMG; }
+    c.addEventListener('webglcontextlost', function (e) { e.preventDefault(); if (raf) { cancelAnimationFrame(raf); raf = 0; } });
+    c.addEventListener('webglcontextrestored', function () { location.reload(); });
+    refresh();
+  }
+  var rt = 0;
+  window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (!animate || paused) refresh(); paint(); }, 120); });
+
+  /* clock and text overlay: only painted when there is something to show */
+  var hasText = !!(CFG.text && CFG.text.text), hasClock = !!(CFG.clock && CFG.clock.on);
+  var oc = document.getElementById('o'), show = true, cScale = 1, cColor = null;
+  var R = (hasText || hasClock) && typeof makeClockRenderer === 'function' ? makeClockRenderer() : null, ox = R ? oc.getContext('2d') : null;
+  if (!R) oc.style.display = 'none';
+  function paint() {
+    if (!R) return;
+    var d = window.devicePixelRatio || 1, w = Math.round(oc.clientWidth * d), h = Math.round(oc.clientHeight * d);
+    if (oc.width !== w || oc.height !== h) { oc.width = w; oc.height = h; }
+    ox.clearRect(0, 0, w, h); if (!show) return;
+    var C = {}; for (var k in CFG.clock) C[k] = CFG.clock[k];
+    C.size = C.size * cScale; if (cColor) C.color = cColor;
+    R.draw(ox, w, h, C, CFG.text, new Date());
+  }
+  paint();
+  if (hasClock) setInterval(paint, CFG.clock.kind === 'analog' && CFG.clock.smooth && CFG.clock.seconds ? 33 : 250);
+
+  function col3(v) { return String(v).split(' ').map(function (n) { return Math.min(1, Math.max(0, parseFloat(n) || 0)); }); }
+  function apply(p) {
+    var wasAnim = animate;
+    if (p.animate) animate = !!p.animate.value;
+    if (p.stillframe) still = p.stillframe.value / 100;
+    if (p.speed) speed = CFG.speed * p.speed.value / 100;
+    if (p.intensity) intensity = CFG.intensity * p.intensity.value / 100;
+    if (p.grain) grain = p.grain.value / 100;
+    if (p.quality) quality = p.quality.value;
+    if (p.fpscap) fpsCap = p.fpscap.value;
+    for (var i = 0; i < 4; i++) if (p['color' + i]) colors[i] = col3(p['color' + i].value);
+    if (p.overlay) show = !!p.overlay.value;
+    if (p.clocksize) cScale = p.clocksize.value / 100;
+    if (p.clockcolor) cColor = '#' + col3(p.clockcolor.value).map(function (n) { return ('0' + Math.round(n * 255).toString(16)).slice(-2); }).join('');
+    if (animate && !wasAnim) phase = still * loop;
+    stale = true;
+    if (!gl) fallback();
+    refresh(); paint();
+  }
+  window.wallpaperPropertyListener = {
+    applyUserProperties: apply,
+    applyGeneralProperties: function (p) { if (p.fps) hostFps = p.fps; }
+  };
+  window.dreamscreen = {
+    apply: apply,
+    pause: function (b) { paused = !!b; refresh(); },
+    /* renders one exact moment of the loop (or the still moment when t is null) at w x h as a JPEG data URL: used for videos, Live Photos and desktop pictures */
+    capture: function (t, w, h, q) {
+      if (!gl) return null;
+      var at = t == null ? still * loop : t;   /* no time given: the still moment */
+      var keep = phase; phase = ((at % loop) + loop) % loop; size(true, w, h); draw();
+      var url = c.toDataURL('image/jpeg', q || .92); phase = keep; size(!animate); draw(); return url;
+    },
+    info: function () { return { loop: loop / speed, animate: animate, paused: paused }; }
+  };
+  /* Lively Wallpaper (free, Windows) sends one setting at a time, colors as #RRGGBB, and tells the page when it is paused */
+  window.livelyPropertyListener = function (name, val) {
+    var p = {};
+    if (/^color[0-3]$/.test(name)) {
+      var n = parseInt(String(val).replace('#', '').slice(-6), 16); if (isNaN(n)) return;
+      p[name] = { value: ((n >> 16) & 255) / 255 + ' ' + ((n >> 8) & 255) / 255 + ' ' + (n & 255) / 255 };
+    } else if (name === 'animate') p[name] = { value: val === true || val === 'true' };
+    else { var v = Number(val); if (isNaN(v)) return; p[name] = { value: v }; }
+    apply(p);
+  };
+  window.livelyWallpaperPlaybackChanged = function (data) {
+    try { window.dreamscreen.pause(!!JSON.parse(data).IsPaused); } catch (e) {}
+  };
+  window.addEventListener('message', function (e) {
+    var d = e.data; if (!d || d.dreamscreen !== 1) return;
+    if (d.props) apply(d.props);
+    if ('paused' in d) window.dreamscreen.pause(d.paused);
+  });
+}
+const js = v => JSON.stringify(v).replace(/</g, '\\u003c');
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function buildWallpaperHTML(imgURI) {
+  const cfg = { fps: PERF[S.perf].fps, quality: PERF[S.perf].q, colors: S.colors.map(hexRgb), speed: S.speed, loop: S.loop, motion: S.motion, frame: S.frame,
+    scale: S.scale, intensity: S.intensity, grain: S.grain, vignette: S.vignette, seed: S.seed, fxOver: S.fxOver,
+    phase: studio.phase % S.loop, clock: clockCfg(), text: textCfg() };
+  return '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<title>' + esc(S.title) + '</title>\n<style>\n' +
+    'html,body{margin:0;height:100%;background:#000;overflow:hidden}\n#c,#o{position:fixed;inset:0;width:100%;height:100%;display:block}\n#o{pointer-events:none}\n' +
+    '</style>\n</head>\n<body>\n<canvas id="c"></canvas>\n<canvas id="o"></canvas>\n<script>\n' +
+    'var CFG=' + js(cfg) + ';\nvar VERT=' + js(VERT) + ';\nvar FRAG=' + js('#define OCT ' + (S.perf === 'saver' ? 4 : 5) + '\n' + COMMON + FX[S.fx].src + MAIN) + ';\nvar IMG=' + js(imgURI) + ';\n' +
+    (S.clock.on || S.text.trim() ? makeClockRenderer.toString() + ';\n' : '') + '(' + wallpaperRuntime.toString() + ')();\n<\/script>\n</body>\n</html>\n';
+}
+/* The same settings work in Wallpaper Engine (project.json) and in Dreamscreen Player. */
+function wallpaperProps() {
+  const c3 = h => hexRgb(h).map(v => v.toFixed(3)).join(' ');
+  const props = {
+    schemecolor: { order: 0, text: 'ui_browse_properties_scheme_color', type: 'color', value: c3(S.colors[1]) },
+    animate: { order: 1, text: 'Animated (off: a still image, no GPU load)', type: 'bool', value: S.motion !== 'still' },
+    speed: { order: 2, text: 'Speed (%)', type: 'slider', min: 25, max: 300, value: 100, condition: 'animate.value == true' },
+    stillframe: { order: 3, text: 'Still moment (%)', type: 'slider', min: 0, max: 100, value: Math.round(S.frame * 100), condition: 'animate.value == false' },
+    intensity: { order: 4, text: 'Intensity (%)', type: 'slider', min: 0, max: 200, value: 100 },
+    color0: { order: 5, text: 'Background color', type: 'color', value: c3(S.colors[0]) },
+    color1: { order: 6, text: 'Depth color', type: 'color', value: c3(S.colors[1]) },
+    color2: { order: 7, text: 'Main color', type: 'color', value: c3(S.colors[2]) },
+    color3: { order: 8, text: 'Highlight color', type: 'color', value: c3(S.colors[3]) },
+    grain: { order: 9, text: 'Grain (%)', type: 'slider', min: 0, max: 100, value: Math.round(S.grain * 100) },
+    quality: { order: 10, text: 'Render quality (%)', type: 'slider', min: 25, max: 400, value: PERF[S.perf].q },
+    fpscap: { order: 11, text: 'Frame rate limit', type: 'slider', min: 10, max: 60, value: PERF[S.perf].fps, condition: 'animate.value == true' },
+  };
+  if (S.clock.on || S.text.trim()) props.overlay = { order: 12, text: 'Show clock and text', type: 'bool', value: true };
+  if (S.clock.on) {
+    props.clocksize = { order: 13, text: 'Clock size (%)', type: 'slider', min: 50, max: 200, value: 100 };
+    props.clockcolor = { order: 14, text: 'Clock color', type: 'color', value: c3(S.clock.color) };
+  }
+  return props;
+}
+const blobToDataURL = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej({ code: 'gl' }); r.readAsDataURL(b); });
+/* JSZip is only needed for the Wallpaper Engine package, so it loads when the Studio opens, not with the page */
+let zipLoading = null;
+const loadJSZip = () => window.JSZip ? Promise.resolve() : (zipLoading = zipLoading || new Promise((res, rej) => {
+  const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; sc.async = true;
+  sc.onload = () => window.JSZip ? res() : rej({ code: 'zip' }); sc.onerror = () => { zipLoading = null; sc.remove(); rej({ code: 'zip' }); };
+  document.head.append(sc);
+}));
+async function exportWE() {
+  busy(true); status('Packing the wallpaper for Wallpaper Engine …');
+  try {
+    await loadJSZip();
+    await nextFrame();
+    const imgURI = studioImage ? studioImage.toDataURL('image/jpeg', .9) : null;
+    const project = { contentrating: 'Everyone', description: 'A wallpaper designed in the Dreamscreen studio. Effect: ' + FX[S.fx].name + '.', file: 'index.html',
+      general: { properties: wallpaperProps() }, preview: 'preview.jpg', tags: ['Abstract'], title: S.title || 'Wallpaper', type: 'web', visibility: 'private' };
+    const prev = await toBlob(renderStill(640, 360, studio.phase), 'image/jpeg', .88);
+    const readme = 'Wallpaper: ' + (S.title || 'Wallpaper') + '\r\n\r\nInstalling in Wallpaper Engine\r\n1. Unzip this file into its own folder.\r\n' +
+      '2. In Wallpaper Engine, open the Wallpaper Editor and choose Create Wallpaper.\r\n3. Select index.html from the unzipped folder.\r\n' +
+      '4. Apply the wallpaper. Animated or still, speed, colors, grain, render quality and the frame rate limit can be changed in its properties.\r\n\r\n' +
+      'This ZIP also opens in Dreamscreen Player, and index.html works on its own in a browser or in Lively Wallpaper.\r\n\r\n' +
+      'This wallpaper runs on the Dreamscreen Lite engine. When animated it plays a seamless loop at a capped frame rate and a fixed pixel budget, scaled up to your monitor, so it stays light on the graphics card even at 4K. If the card is busy the engine lowers the quality by itself. ' +
+      'Switch Animated off and it draws one sharp frame and then leaves the graphics card alone.\r\n';
+    const zip = new JSZip(); const dir = zip.folder(slug(S.title));
+    dir.file('index.html', buildWallpaperHTML(imgURI)); dir.file('project.json', JSON.stringify(project, null, '\t')); dir.file('preview.jpg', prev); dir.file('README.txt', readme);
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    await saveFile(slug(S.title) + '-wallpaper-engine.zip', blob);
+    status('The package is ready. Unzip it and select index.html in Wallpaper Engine.');
+  } catch (e) { status(explain(e), true); } finally { busy(false); }
+}
+/* The settings Lively shows under Customise. Names match the ones the wallpaper already understands. */
+function livelyProps() {
+  const sl = (text, value, min, max, step) => ({ type: 'slider', text, value, min, max, step });
+  const props = {
+    animate: { type: 'checkbox', text: 'Animated', value: S.motion !== 'still' },
+    speed: sl('Speed (%)', 100, 10, 300, 5),
+    stillframe: sl('Still moment (%)', Math.round(S.frame * 100), 0, 100, 1),
+    intensity: sl('Intensity (%)', 100, 0, 200, 5),
+    grain: sl('Grain (%)', Math.round(S.grain * 100), 0, 100, 5),
+  };
+  ['Background', 'Depth', 'Main', 'Highlight'].forEach((n, i) => { props['color' + i] = { type: 'color', text: n + ' color', value: S.colors[i] }; });
+  props.quality = sl('Sharpness (%)', PERF[S.perf].q, 25, 400, 25);
+  props.fpscap = sl('Frame rate limit', PERF[S.perf].fps, 10, 60, 5);
+  return props;
+}
+/* One ZIP for Lively Wallpaper, the free wallpaper app for Windows. Lively recognises a wallpaper package by LivelyInfo.json
+   at the top of the ZIP and imports it when the file is dropped into its window, so nothing needs unzipping. Type 1 is a web page. */
+async function exportLively() {
+  busy(true); status('Packing the wallpaper for Lively …');
+  try {
+    await loadJSZip();
+    await nextFrame();
+    const imgURI = studioImage ? studioImage.toDataURL('image/jpeg', .9) : null;
+    const thumb = await toBlob(renderStill(640, 360, studio.phase), 'image/jpeg', .88);
+    const info = { AppVersion: '2.2.0.0', Title: S.title || 'Wallpaper', Thumbnail: 'thumbnail.jpg', Preview: null,
+      Desc: 'Made in the Dreamscreen studio. Effect: ' + FX[S.fx].name + '.', Author: 'Dreamscreen', License: null, Contact: null,
+      Type: 1, FileName: 'index.html', Arguments: '--pause-event true', IsAbsolutePath: false };
+    const zip = new JSZip();
+    zip.file('LivelyInfo.json', JSON.stringify(info, null, 2)); zip.file('LivelyProperties.json', JSON.stringify(livelyProps(), null, 2));
+    zip.file('index.html', buildWallpaperHTML(imgURI)); zip.file('thumbnail.jpg', thumb);
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    await saveFile(slug(S.title) + '-lively.zip', blob);
+    status('Ready. Open Lively Wallpaper and drop this ZIP into its window.');
+  } catch (e) { status(explain(e), true); } finally { busy(false); }
+}
+/* One file for Dreamscreen Player on the computer and on iPhone: the wallpaper, its settings and a preview. */
+async function exportDS() {
+  busy(true); status('Packing the wallpaper for Dreamscreen Player …');
+  try {
+    await nextFrame();
+    const imgURI = studioImage ? studioImage.toDataURL('image/jpeg', .9) : null;
+    const preview = await blobToDataURL(await toBlob(renderStill(640, 360, studio.phase), 'image/jpeg', .85));
+    const doc = { format: 'dreamscreen', version: 1, title: S.title || 'Wallpaper', effect: FX[S.fx].name, loop: S.loop, motion: S.motion,
+      properties: wallpaperProps(), preview, html: buildWallpaperHTML(imgURI) };
+    const blob = new Blob([JSON.stringify(doc)], { type: 'application/json' });
+    await saveFile(slug(S.title) + '.dreamscreen', blob);
+    status('Ready. Open the .dreamscreen file in Dreamscreen Player on your computer or iPhone.');
+  } catch (e) { status(explain(e), true); } finally { busy(false); }
+}
+/* Records exactly one loop, frame by frame, so the video repeats without a jump. MP4 where the browser can, otherwise WebM. */
+async function exportVideo() {
+  const [w, h] = resWH(), FPS = 30, dur = Math.min(60, S.loop / S.speed), N = Math.round(dur * FPS); busy(true);
+  let st = null;
+  try {
+    if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) throw { code: 'video' };
+    const mime = ['video/mp4;codecs=avc1.640033', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)); if (!mime) throw { code: 'video' };
+    const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
+    const gcv = document.createElement('canvas'); gcv.width = w; gcv.height = h; st = new Stage(gcv, { preserve: true, power: 'high-performance' });
+    if (!st.gl || st.gl.drawingBufferWidth !== w) throw { code: 'gl' };
+    const out = document.createElement('canvas'); out.width = w; out.height = h; const x = out.getContext('2d');
+    const rec = new MediaRecorder(out.captureStream(FPS), { mimeType: mime, videoBitsPerSecond: Math.min(45e6, Math.round(w * h * 5)) });
+    const chunks = []; rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    const done = new Promise((res, rej) => { rec.onstop = res; rec.onerror = () => rej({ code: 'video' }); });
+    const cfg = sCfg(); let t0 = 0, drawn = -1;
+    const paint = i => { st.draw(cfg, i / N * S.loop); x.drawImage(gcv, 0, 0); clockR.draw(x, w, h, clockCfg(), textCfg(), new Date()); };
+    xProg.hidden = false; xProg.value = 0; status('Recording one ' + dur.toFixed(dur % 1 ? 1 : 0) + '-second loop at ' + w + ' × ' + h + '. Keep this tab open and visible.');
+    paint(0); rec.start(500);
+    await new Promise(res => { const loop = now => {
+      if (!t0) t0 = now;
+      const i = Math.floor((now - t0) / 1000 * FPS);
+      if (i >= N) { res(); return; }
+      if (i !== drawn) { drawn = i; paint(i); xProg.value = i / N; }
+      requestAnimationFrame(loop); };
+      requestAnimationFrame(loop); });
+    rec.stop(); await done;
+    const blob = new Blob(chunks, { type: mime.split(';')[0] }); if (!blob.size) throw { code: 'video' };
+    await saveFile(slug(S.title) + '-loop-' + w + 'x' + h + '.' + ext, blob);
+    status('The loop is ready, ' + (blob.size / 1048576).toFixed(1) + ' MB. Set your player to repeat and it never jumps.');
+  } catch (e) { status(explain(e), true); } finally { if (st) st.destroy(); xProg.hidden = true; busy(false); }
+}
+const guarded = fn => () => { if (locked()) { status('Buy this template to download it. Your customized design is kept.', true); return; } return fn(); };
+$('#xLV').onclick = guarded(exportLively); $('#xImg').onclick = guarded(exportImage); $('#xWE').onclick = guarded(exportWE); $('#xVid').onclick = guarded(exportVideo); $('#xDS').onclick = guarded(exportDS);
+
+/* ================= sound ================= */
+/* Lets the show move with music. The source is the microphone (the room) or a song file that the page plays itself.
+   Three smoothed values come out, each from 0 to 1: kick (a soft pulse on a bass hit), level (how loud it is overall)
+   and air (the highs). Loudness is measured against the recent peak, so a quiet room and a loud club both use the whole range.
+   Everything is eased, and the picture changes by a fifth at most, so it swells with the music and never strobes. */
+const sound = {
+  ctx: null, an: null, bins: null, src: null, stream: null, el: null, elNode: null, url: '', mode: '',
+  kick: 0, level: 0, air: 0, peak: .06, bassAvg: 0,
+  ensure() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('no audio');
+      this.ctx = new AC(); this.an = this.ctx.createAnalyser(); this.an.fftSize = 2048; this.an.smoothingTimeConstant = .7;
+      this.bins = new Uint8Array(this.an.frequencyBinCount);
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  /* the microphone is only listened to: it is never sent to the speakers and never leaves the page */
+  async mic() {
+    this.stop(); this.ensure();
+    const st = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    this.stream = st; this.src = this.ctx.createMediaStreamSource(st); this.src.connect(this.an); this.mode = 'mic';
+  },
+  file(f) {
+    this.stop(); this.ensure();
+    if (!this.el) { this.el = new Audio(); this.el.loop = true; this.elNode = this.ctx.createMediaElementSource(this.el); }
+    this.url = URL.createObjectURL(f); this.el.src = this.url;
+    this.elNode.connect(this.an); this.an.connect(this.ctx.destination); this.mode = 'song';
+    return this.el.play();
+  },
+  stop() {
+    if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
+    if (this.src) { try { this.src.disconnect(); } catch (e) {} this.src = null; }
+    if (this.el && this.mode === 'song') {
+      this.el.pause(); try { this.elNode.disconnect(); this.an.disconnect(); } catch (e) {}
+      this.el.removeAttribute('src'); if (this.url) { URL.revokeObjectURL(this.url); this.url = ''; }
+    }
+    this.mode = ''; this.kick = this.level = this.air = 0; this.peak = .06; this.bassAvg = 0;
+  },
+  tick(dt) {
+    if (!this.mode) return;
+    this.an.getByteFrequencyData(this.bins);
+    const hz = this.ctx.sampleRate / this.an.fftSize, last = this.bins.length - 1;
+    const band = (a, b) => { let sum = 0, n = 0; for (let i = Math.max(1, Math.round(a / hz)); i <= Math.min(last, Math.round(b / hz)); i++) { sum += this.bins[i]; n++; } return n ? sum / n / 255 : 0; };
+    const bass = band(30, 160), mid = band(160, 2500), high = band(2500, 9000), all = bass * .5 + mid * .35 + high * .15;
+    this.peak = Math.max(all, this.peak - dt * .03, .06);            /* rises at once, falls slowly, has a floor so silence stays still */
+    const k = 1 / this.peak, ease = (cur, to, up, down) => cur + (to - cur) * Math.min(1, dt * (to > cur ? up : down));
+    this.level = ease(this.level, Math.min(1, all * k), 6, 1.5);
+    this.air = ease(this.air, Math.min(1, high * k * 1.6), 10, 3);
+    this.bassAvg += (bass - this.bassAvg) * Math.min(1, dt * 2.5);
+    const hit = bass > this.bassAvg * 1.25 + .02 ? Math.min(1, (bass - this.bassAvg) * k * 3) : 0;   /* bass clearly above its own average */
+    this.kick = ease(this.kick, hit, 18, 3.2);
+  },
+};
+
+/* ================= show ================= */
+/* The same wallpapers as a full-screen projection, for a wall, a TV or a screen behind a band. It opens with the design that
+   is in the Studio and then moves through the catalogue, changing every so often. At a change the frame on screen is frozen
+   onto a second canvas on top, the next wallpaper starts underneath, and the frozen frame fades away. */
+const SHOW_KEY = 'dreamscreen.show', SHOW_STEPS = [[30, '30 s'], [60, '1 min'], [300, '5 min'], [0, 'Hold']];
+const SHOW_PX = IS_PHONE ? 420000 : 1300000;
+const show = {
+  el: $('#show'), cv: $('#showCanvas'), fade: $('#showFade'), stage: null, open: false, list: [], i: 0, phase: 0, t: 0, acc: 0,
+  step: 1, pending: false, painted: false, native: false, picking: false, idleT: 0, lock: null, live: {},
+  start() {
+    if (this.open) return;
+    if (pseudoFull) setPseudo(false);
+    if (!this.stage) this.stage = new Stage(this.cv, { async: true, power: 'default' });
+    const b = baseItem(), at = b ? ITEMS.indexOf(b) : -1;
+    /* an untouched Studio holds the stock design, which looks like the first catalogue wallpaper, so it is left out */
+    const stock = !b && S.fx === DEF.fx && S.pal === DEF.pal && S.seed === DEF.seed && !studioImage;
+    this.list = stock ? [] : [sCfg()];
+    for (let k = 1; k <= ITEMS.length; k++) { const it = ITEMS[(at + k + ITEMS.length) % ITEMS.length]; if (it !== b) this.list.push(itemCfg(it)); }
+    this.i = 0; this.phase = studio.phase; this.t = 0; this.acc = 1; this.pending = false; this.painted = false; this.native = false;
+    const saved = store.get(SHOW_KEY, null); this.step = Number.isInteger(saved) && SHOW_STEPS[saved] ? saved : 1; this.label();
+    this.fade.style.transition = 'none'; this.fade.style.opacity = '0';
+    this.open = true; this.el.hidden = false; document.body.classList.add('show-on');
+    /* real full screen where the browser allows it; otherwise the show simply fills the page */
+    const req = this.el.requestFullscreen || this.el.webkitRequestFullscreen;
+    if (req) { try { const p = req.call(this.el); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+    this.keepAwake(); this.wake(); this.warm();
+  },
+  close() {
+    if (!this.open) return;
+    this.open = false; this.el.hidden = true; document.body.classList.remove('show-on'); clearTimeout(this.idleT);
+    if ((document.fullscreenElement || document.webkitFullscreenElement) === this.el) { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {} }
+    if (this.lock) { try { this.lock.release(); } catch (e) {} this.lock = null; }
+    sound.stop(); soundSync(); showMsg('');
+    bgDirty = true; studio.dirty = true;
+  },
+  /* keeps the screen from going to sleep while the show runs, where the browser allows it */
+  keepAwake() {
+    if (!navigator.wakeLock || this.lock) return;
+    navigator.wakeLock.request('screen').then(l => {
+      if (!this.open) { l.release(); return; }
+      this.lock = l; l.addEventListener('release', () => { if (this.lock === l) this.lock = null; });
+    }).catch(() => {});
+  },
+  /* the controls fade away after a moment and come back on a tap or a mouse move */
+  wake() { clearTimeout(this.idleT); this.el.classList.remove('idle'); if (this.open) this.idleT = setTimeout(() => this.el.classList.add('idle'), 2600); },
+  label() {
+    const st = SHOW_STEPS[this.step], b = $('#shTime'); b.textContent = st[1];
+    b.setAttribute('aria-label', st[0] ? 'Changes every ' + st[1] + '. Press to change.' : 'Stays on this wallpaper. Press to change.');
+  },
+  /* starts compiling the next wallpaper's shader ahead of time */
+  warm() { const n = this.list[(this.i + 1) % this.list.length]; if (this.stage.gl && n) this.stage.prog(n.fx); },
+  go(d) {
+    if (!this.open || this.list.length < 2) return;
+    if (this.stage.gl && !this.pending) {
+      const f = this.fade; if (f.width !== this.cv.width || f.height !== this.cv.height) { f.width = this.cv.width; f.height = this.cv.height; }
+      if (this.stage.draw(this.cur(), this.phase)) { f.getContext('2d').drawImage(this.cv, 0, 0); f.style.transition = 'none'; f.style.opacity = '1'; this.pending = true; }
+    }
+    this.i = (this.i + d + this.list.length) % this.list.length; this.t = 0; this.acc = 1; this.painted = false;
+    const L = this.list[this.i].loop || LOOP; this.phase = ((this.phase % L) + L) % L;
+    this.warm();
+  },
+  /* with music on, the wallpaper is drawn a little brighter, closer and grainier as the sound asks */
+  cur() {
+    const c = this.list[this.i]; if (!c || !sound.mode || reduced) return c;
+    const o = Object.assign(this.live, c);
+    o.intensity = c.intensity * (.86 + .14 * sound.level + .22 * sound.kick);
+    o.scale = c.scale * (1 + .03 * sound.level + .05 * sound.kick);
+    o.grain = Math.min(1, c.grain + .25 * sound.air);
+    return o;
+  },
+  tick(dt) {
+    const c = this.list[this.i]; if (!c) return;
+    if (!reduced) {
+      sound.tick(dt);
+      const push = sound.mode ? 1 + 2.2 * sound.level + 1.2 * sound.kick : 1;     /* louder music, faster drift */
+      this.phase = (this.phase + dt * c.speed * push) % (c.loop || LOOP);
+      const every = SHOW_STEPS[this.step][0];
+      if (every) { this.t += dt; if (this.t >= every) { this.go(1); return; } }
+    }
+    this.acc += dt; if (this.acc < frameGap()) return; this.acc = 0;
+    const w = this.cv.width, h = this.cv.height; fitCanvasPx(this.cv, SHOW_PX);
+    if (!this.stage.gl) {                                     /* no WebGL: a still gradient in the wallpaper's colors */
+      if (!this.painted || w !== this.cv.width || h !== this.cv.height) { paintFallback(this.cv, c.colors); this.painted = true; }
+      return;
+    }
+    if (this.stage.draw(this.cur(), this.phase) && this.pending) {
+      this.pending = false; void this.fade.offsetWidth; this.fade.style.transition = 'opacity 2.6s ease'; this.fade.style.opacity = '0';
+    }
+  },
+};
+const shMsg = $('#shMsg'); let shMsgT = 0;
+function showMsg(t) { shMsg.textContent = t; clearTimeout(shMsgT); if (t) shMsgT = setTimeout(() => { shMsg.textContent = ''; }, 6000); }
+function soundSync() { $('#shMic').setAttribute('aria-pressed', String(sound.mode === 'mic')); $('#shSong').setAttribute('aria-pressed', String(sound.mode === 'song')); }
+$('#shMic').onclick = async () => {
+  show.wake();
+  if (sound.mode === 'mic') { sound.stop(); soundSync(); return; }
+  try { await sound.mic(); showMsg(''); } catch (e) { sound.stop(); showMsg('The microphone is not available here. Choose a song instead.'); }
+  soundSync();
+};
+$('#shSong').onclick = () => {
+  show.wake();
+  if (sound.mode === 'song') { sound.stop(); soundSync(); return; }
+  show.picking = true; $('#shFile').click();          /* a file dialog can end full screen; that must not end the show */
+};
+$('#shFile').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; show.picking = false; if (!f) return;
+  try { await sound.file(f); showMsg(''); } catch (err) { sound.stop(); showMsg('This file could not be played. Try an MP3 or a WAV.'); }
+  soundSync();
+});
+$('#shFile').addEventListener('cancel', () => { show.picking = false; });
+$('#tabShow').onclick = () => show.start();
+$('#shClose').onclick = () => show.close();
+$('#shPrev').onclick = () => { show.go(-1); show.wake(); };
+$('#shNext').onclick = () => { show.go(1); show.wake(); };
+$('#shTime').onclick = () => { show.step = (show.step + 1) % SHOW_STEPS.length; show.t = 0; show.label(); store.set(SHOW_KEY, show.step); show.wake(); };
+show.el.addEventListener('pointerdown', () => show.wake(), true);
+show.el.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') show.wake(); });
+(() => {   /* a sideways swipe changes the wallpaper */
+  let x0 = null, y0 = 0;
+  show.el.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' || e.target.closest('button')) { x0 = null; return; } x0 = e.clientX; y0 = e.clientY; });
+  show.el.addEventListener('pointerup', e => {
+    if (x0 == null) return; const dx = e.clientX - x0, dy = e.clientY - y0; x0 = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.2) show.go(dx < 0 ? 1 : -1);
+  });
+})();
+document.addEventListener('keydown', e => {
+  if (!show.open) return;
+  if (e.key === 'Escape') show.close(); else if (e.key === 'ArrowRight') { show.go(1); show.wake(); } else if (e.key === 'ArrowLeft') { show.go(-1); show.wake(); }
+});
+['fullscreenchange', 'webkitfullscreenchange'].forEach(n => document.addEventListener(n, () => {
+  const on = (document.fullscreenElement || document.webkitFullscreenElement) === show.el;
+  if (on) show.native = true;
+  else if (show.picking) show.native = false;                          /* the file dialog took full screen away: carry on filling the page */
+  else if (show.native && show.open) show.close();                     /* leaving full screen ends the show */
+}));
+document.addEventListener('visibilitychange', () => { if (show.open && document.visibilityState === 'visible') show.keepAwake(); });
+
+/* ================= boot ================= */
+/* start compiling every shader the gallery needs at once, in the background where the browser supports it */
+[...new Set(ITEMS.map(i => i.fx))].forEach(fx => mini.prog(fx)); bgStage.gl && bgStage.prog('haze');
+(() => {
+  const c = document.createElement('canvas'); c.width = c.height = 160; const x = c.getContext('2d'); if (!x) return;
+  const d = x.createImageData(160, 160);
+  for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() < .5 ? 0 : 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = Math.random() * 30 | 0; }
+  x.putImageData(d, 0, 0); $('#grain').style.backgroundImage = 'url(' + c.toDataURL() + ')';
+})();
+buildChips(); buildGrid(); applyFilter(); setAccent(DEFAULT_ACCENT);
+if (FREE) { $('#cartOpen').hidden = true; $('#foot').textContent = 'Every wallpaper is free.'; }
+document.body.classList.add('at-top');
+if ('IntersectionObserver' in window) new IntersectionObserver(es => document.body.classList.toggle('at-top', es[0].isIntersecting), { threshold: .35 }).observe($('#hero'));
+go(location.hash === '#studio' ? 'studio' : 'gallery', false);
+window.addEventListener('hashchange', () => go(location.hash === '#studio' ? 'studio' : 'gallery', false));
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  govTick(dt);
+  bgTick(dt);
+  if (show.open) show.tick(dt);
+  else if (view === 'studio') studio.tick(dt);
+  else if (detailDlg.open) detailTick(dt);
+  else if (!cartDlg.open) cardsTick(dt);
+  requestAnimationFrame(frame);
+}
+bgTick(0); requestAnimationFrame(frame);
+window.addEventListener('resize', () => { bgDirty = true; studio.dirty = true; });
+/* test hook: lets an automated check read state without touching the UI */
+window.__mihot = { sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
+})();
+</script>
+</body>
+</html>

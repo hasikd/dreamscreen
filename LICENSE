@@ -1,0 +1,28 @@
+Dreamscreen
+Copyright (c) 2026 Daniel Hasík. All rights reserved.
+
+This repository is public so that the site can be hosted and its source can be
+read. It is not open source.
+
+You may
+  - use the Dreamscreen site, including its Studio and its Show mode;
+  - download the wallpapers you pick or make there and use them on your own
+    devices and screens.
+
+Without written permission from the copyright holder you may not
+  - copy, modify, republish or host the source code, in whole or in part,
+    outside of what GitHub's terms allow for viewing and forking a public
+    repository;
+  - redistribute, sell, sublicense or upload the wallpapers or the exported
+    wallpaper packages anywhere, including wallpaper libraries such as the
+    Steam Workshop.
+
+The site and everything exported from it are provided "as is", without
+warranty of any kind. The copyright holder is not liable for any damage
+arising from their use.
+
+Third-party components are not part of this repository and stay under their
+own licenses: JSZip (loaded at run time from cdnjs; MIT or GPLv3) and the
+typefaces Zen Dots and Onest (served by Google Fonts; SIL Open Font License).
+
+To ask for permission, open an issue in this repository.
