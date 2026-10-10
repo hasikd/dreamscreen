@@ -20,6 +20,8 @@ The whole site is one file, `index.html`. There is nothing to build or install.
 
   Every drum hit punches the picture toward you, makes it flare, swings its colors, jolts it and throws the motion forward. **Flow** adds what is not a hit: the colors lean with the key of the music, the brightness with its tone, and the picture breathes on its tempo. **Tune** opens a small mixing desk for that: six faders (Zoom, Light, Color, Shake, Speed, Flow) with a style for each kind of music (Techno, House, Hip-hop, Drum & bass, Rock, Metal, Pop, Lo-fi, Ambient), the music's spectrum behind them, and below them the effect and the colors of the wallpaper on screen.
 
+- **Patch** – in the Studio's Music panel and in the show's Tune panel. Each link reads like a sentence: a part of the sound (Bass, Mids, Highs, Beat, Volume, Tone, Tempo) → what the picture does (Flash, Zoom, Rotate, Color, Stretch wide, Stretch tall, Shake, Speed), how much, and how it feels (Snappy, Smooth, Slow). A small bar under each link shows what it hears. **Pulse**, **Flash** and **Drift** are ready-made starting points.
+
 ## Run it
 
 Open `index.html` in a browser, or host it on GitHub Pages:

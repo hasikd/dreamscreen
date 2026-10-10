@@ -18,6 +18,8 @@ img{max-width:100%}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Dots&family=Onest:wght@300;400;500&display=swap">
+<!-- the name waits for its typeface (at most 1.8 s) instead of jumping from a stand-in font; kept on one line so the main script stays the only multi-line one -->
+<script>(function(){var d=document.documentElement,done=function(){d.classList.remove('fl')};d.classList.add('fl');setTimeout(done,1800);if(document.fonts&&document.fonts.load){Promise.all([document.fonts.load('400 1em "Zen Dots"'),document.fonts.load('300 1em Onest')]).then(done,done)}else done()})();</script>
 <style>
 /* Layout: one dark, grainy field of drifting light that never changes between views.
    The first screen is only that field and the name. Wallpapers dissolve out of it as you scroll,
@@ -369,6 +371,16 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
 .seg button{border:0;background:none;padding:8px 10px;border-radius:999px;font-weight:400;color:var(--muted);transition:background .6s var(--ease),color .5s}
 .seg button[aria-pressed="true"]{background:var(--raised);color:var(--fg)}
 .seg.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.patch{display:grid;gap:10px;min-width:0}
+.pr{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto;gap:8px;align-items:center;padding:10px 12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);min-width:0}
+.pr select{min-width:0;width:100%;-webkit-appearance:none;appearance:none;background:var(--raised);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:7px 12px;font:400 .8rem/1.2 var(--font-body)}
+.pr option{background:#141018;color:#f4eef8}
+.pr-ar{color:var(--muted)}
+.pr-x{border:0;background:none;color:var(--muted);font-size:1.15rem;line-height:1;padding:4px}
+.pr-x:hover{color:var(--fg)}
+.pr input[type=range],.pr .tn-fx{grid-column:1/-1}
+.pr-m{position:absolute;left:14px;right:14px;bottom:5px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--w2),var(--w3));transform-origin:left;transform:scaleX(var(--v,0));opacity:.85}
+.patch>.tn-fx button:disabled{opacity:.35}
 .color-row.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .licence{display:grid;justify-items:start;gap:10px;padding:14px 16px;border-radius:var(--r-ctl);background:var(--raised);font-size:.92rem}
 .licence p{color:var(--muted)}
@@ -381,6 +393,10 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
   .bar{gap:14px}
   .cart-btn span{display:none}
 }
+.mark,.logo,.card-screen canvas{transition:opacity .9s var(--ease)}
+.fl .mark,.fl .logo{opacity:0}
+/* a card stays dark until its wallpaper is really drawn, then fades in: no stand-in gradient that pops */
+.card:not(.ready) .card-screen canvas{opacity:0}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition:none!important;animation:none!important}
 }
@@ -492,6 +508,8 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
               <p class="hint" id="smInfo" role="status" aria-live="polite"></p>
               <div class="tn-fx" id="smStyle" role="group" aria-label="Music style"></div>
               <div class="group" id="smFaders"></div>
+              <span class="tn-t">Patch</span>
+              <div class="patch" id="smPatch"></div>
               <p class="hint">High settings flash. Keep them low around anyone sensitive to flashing light.</p>
               <input type="file" id="smFile" accept="audio/*" hidden>
             </div>
@@ -632,6 +650,7 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
       <p class="tn-hint" id="tnHint">Switch on Mic, Song or Computer and the picture moves with the music.</p>
       <p class="tn-hint">High settings flash. Keep them low around anyone sensitive to flashing light.</p>
     </div>
+    <div class="tn-sec"><span class="tn-t">Patch</span><div class="patch" id="tnPatch"></div></div>
     <div class="tn-head"><span class="tn-t">Wallpaper</span><div class="tn-pre"><button type="button" id="tnPrev">Previous</button><button type="button" id="tnNext">Next</button></div></div>
     <div class="tn-sec"><span class="tn-t" id="tnFxT">Effect</span><div class="tn-fx" id="tnFx" role="group" aria-labelledby="tnFxT"></div></div>
     <div class="tn-sec"><span class="tn-t">Colors</span>
@@ -701,11 +720,12 @@ gl_FragColor=vec4(clamp(col,0.,1.),1.);}`;
    u_shift jolts it sideways, u_ring is a ripple that runs outward from the middle (radius, strength, sharpness),
    u_hue swings the colors around the wheel, u_gain and u_flash make it flare. With all of them at rest it is the picture above. */
 const MAIN_REACT = `
-uniform float u_zoom,u_gain,u_flash,u_hue;uniform vec2 u_shift;uniform vec3 u_ring;
+uniform float u_zoom,u_gain,u_flash,u_hue,u_rot;uniform vec2 u_shift,u_str;uniform vec3 u_ring;
 vec3 hueR(vec3 c,float a){const vec3 k=vec3(.57735);float ca=cos(a),sa=sin(a);return c*ca+cross(k,c)*sa+k*dot(k,c)*(1.-ca);}
 void main(){
 vec2 fc=gl_FragCoord.xy;vec2 uv0=fc/u_res;float asp=u_res.x/u_res.y;vec2 P=(fc-.5*u_res)/u_res.y;
 float r=length(P),rg=r-u_ring.x;P+=P/(r+.0001)*u_ring.y*exp(-rg*rg*u_ring.z);
+float cr=cos(u_rot),sr=sin(u_rot);P=vec2(cr*P.x-sr*P.y,sr*P.x+cr*P.y)/(1.+u_str);   /* the patch turns and stretches the picture */
 P=P/(1.+u_zoom)+u_shift;vec2 uv=vec2(P.x/asp,P.y)+.5;vec2 p=P/u_scale;
 SO=vec2(u_seed*1.731,-u_seed*.977);TP=6.2831853*fract(u_time/u_loop);
 vec3 col=effect(uv,P,p,u_time);
@@ -1155,7 +1175,7 @@ const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 const rgbCache = new Map();
 const rgbOf = h => { let v = rgbCache.get(h); if (!v) { v = hexRgb(h); rgbCache.set(h, v); } return v; };
 const UNIFORMS = ['u_res', 'u_time', 'u_loop', 'u_c0', 'u_c1', 'u_c2', 'u_c3', 'u_scale', 'u_int', 'u_grain', 'u_vig', 'u_seed', 'u_imgOn', 'u_imgAspect', 'u_fxOver', 'u_img',
-  'u_zoom', 'u_gain', 'u_flash', 'u_hue', 'u_shift', 'u_ring', 'u_kick', 'u_lvl'];
+  'u_zoom', 'u_gain', 'u_flash', 'u_hue', 'u_shift', 'u_ring', 'u_kick', 'u_lvl', 'u_rot', 'u_str'];
 /* One WebGL context. Options:
    preserve: keep the drawing buffer (for copying it elsewhere)
    oct:      octaves of noise (4 for small or blurred canvases, 5 by default)
@@ -1226,6 +1246,7 @@ class Stage {
       gl.uniform1f(u.u_zoom, cfg.rz || 0); gl.uniform1f(u.u_gain, cfg.rg == null ? 1 : cfg.rg); gl.uniform1f(u.u_flash, cfg.rf || 0); gl.uniform1f(u.u_hue, cfg.rh || 0);
       gl.uniform2f(u.u_shift, cfg.rsx || 0, cfg.rsy || 0); gl.uniform3f(u.u_ring, cfg.rrR || 0, cfg.rrA || 0, 34);
       gl.uniform1f(u.u_kick, cfg.rk || 0); gl.uniform1f(u.u_lvl, cfg.rl || 0);
+      gl.uniform1f(u.u_rot, cfg.rr || 0); gl.uniform2f(u.u_str, cfg.rwx || 0, cfg.rwy || 0);
     }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     return true;
@@ -1619,6 +1640,7 @@ function buildGrid() {
     root.append(scr, top, bot); grid.append(root);
     const c = { it, root, add, edit, own, priceEl, ctx: cv.getContext('2d'), cfg: itemCfg(it), offset: 6 + it.seed, visible: true, ready: false, last: -1 };
     cards.push(c); c.ready = drawMini(c.ctx, c.cfg, c.offset); if (io) io.observe(root);
+    if (c.ready || !GL_OK) root.classList.add('ready');          /* without WebGL the stand-in gradient is all there is */
   });
   syncCart();
 }
@@ -1652,7 +1674,7 @@ function cardsTick(dt) {
   const n = Math.min(gov.half ? CARD_PER_FRAME / 2 : CARD_PER_FRAME, due.length);
   for (let i = 0; i < n; i++) {
     const c = due[i]; c.last = cardClock;
-    if (drawMini(c.ctx, c.cfg, c.offset + (reduced ? 0 : cardClock * BASE_SPEED))) c.ready = true;
+    if (drawMini(c.ctx, c.cfg, c.offset + (reduced ? 0 : cardClock * BASE_SPEED)) && !c.ready) { c.ready = true; c.root.classList.add('ready'); }
   }
 }
 function syncCards() {
@@ -2484,6 +2506,8 @@ const sound = {
   meyda: null, td: null, fi: 0, fdt: 0, tone: .5, noise: 0, kx: 0, ky: 0, keyAng: 0, keyAmt: 0,
   /* tempo: bt the times of recent hits, bpm the tempo found in them (0 while unsure), gph a beat clock locked to it, groove 1 on the beat */
   bt: [], bpm: 0, vote: 0, cand: 0, gph: 0, groove: 0,
+  /* band: bass, mids, highs, 0..1, each measured against its own recent peak */
+  band: [0, 0, 0], bandPeak: [.05, .05, .05],
   ensure() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('no audio');
@@ -2586,6 +2610,7 @@ const sound = {
     this.ht.length = this.hv.length = 0; this.quiet = 0; this.warned = false; this.ratio = 1; this.rt.fill(-1); this.ring.forEach(r => r.fill(0));
     this.tone = .5; this.noise = this.kx = this.ky = this.keyAng = this.keyAmt = 0; this.fi = 0; this.fdt = 0;
     this.bt.length = 0; this.bpm = this.vote = this.cand = this.gph = this.groove = 0;
+    this.band.fill(0); this.bandPeak.fill(.05);
   },
   tick(dt) {
     if (!this.mode) return;
@@ -2600,9 +2625,10 @@ const sound = {
     const floor = this.ref - 60, R = this.ring, rt = this.rt, n = R.length, cur = R[this.ri];
     /* the frame to compare with: the newest one that is at least 28 ms old, so the measure does not depend on the tick rate */
     let old = null; for (let k = 1; k < n; k++) { const j = (this.ri - k + n) % n; if (rt[j] < 0) break; old = R[j]; if (this.clock - rt[j] >= .028) break; }
-    let lo = 0, jump = 0, body = 0, high = 0;
+    let lo = 0, jump = 0, body = 0, high = 0, bB = 0, bM = 0, bH = 0; const im = at(2000);
     for (let i = i0; i <= i3; i++) {
       const v = db[i] > floor ? (db[i] - floor) / 60 : 0, d = old ? v - old[i] : 0; cur[i] = v;
+      if (i <= i1) bB += v; else if (i <= im) bM += v; else bH += v;        /* the three bands the patch listens to */
       if (i <= i1) { if (d > 0) lo += d; } else if (i <= i2 && d > .0667) jump++;       /* the low end rising; higher frequencies that jumped by 4 dB or more */
       if (i <= i2) body += v; else high += v;
     }
@@ -2631,8 +2657,84 @@ const sound = {
     this.peak = Math.max(body, this.peak - dt * .03, .1);
     this.level = ease(this.level, Math.min(1, body / this.peak), 6, 1.5);
     this.air = ease(this.air, Math.min(1, high * 2.2), 10, 3);
+    /* each band against its own loudest moment lately, so a quiet song and a loud one both use the whole range */
+    const bands = [bB / (i1 - i0 + 1), bM / Math.max(1, im - i1), bH / Math.max(1, i3 - im)], bp = this.bandPeak;
+    for (let k = 0; k < 3; k++) {
+      const v = top <= -80 ? 0 : bands[k]; bp[k] = Math.max(v, bp[k] - dt * .04, .05);
+      this.band[k] = Math.min(1, Math.pow(v / bp[k], 1.6));               /* the curve keeps the floor of the band quiet */
+    }
   },
 };
+
+/* ================= patch ================= */
+/* Links from a part of the sound to something the picture does. In TouchDesigner this is a chain of nodes:
+   Audio Spectrum → Analyze → Math → Lag → a parameter. Here each link is one row anyone can read,
+   "Bass → Stretch wide, 60 %, Snappy": the band is measured against its own recent peak (Analyze and Math),
+   the feel is an attack and a release (Lag), and the target is a uniform of the reacting shader. */
+const PATCH_KEY = 'dreamscreen.patch';
+const P_SRC = { bass: 'Bass', mids: 'Mids', highs: 'Highs', beat: 'Beat', volume: 'Volume', tone: 'Tone', tempo: 'Tempo' };
+const P_DO = { flash: 'Flash', zoom: 'Zoom', rotate: 'Rotate', color: 'Color', wide: 'Stretch wide', tall: 'Stretch tall', shake: 'Shake', speed: 'Speed' };
+const P_FEEL = { snappy: [.01, .12, 'Snappy'], smooth: [.06, .4, 'Smooth'], slow: [.5, 1.5, 'Slow'] };      /* attack and release, seconds */
+const P_START = [{ name: 'Pulse', rows: [['beat', 'zoom', .5, 'snappy'], ['bass', 'wide', .35, 'smooth']] },
+  { name: 'Flash', rows: [['beat', 'flash', .6, 'snappy'], ['highs', 'shake', .3, 'snappy']] },
+  { name: 'Drift', rows: [['tone', 'color', .6, 'slow'], ['volume', 'rotate', .3, 'slow']] }, { name: 'Clear', rows: [] }];
+const pSrc = s => s === 'bass' ? sound.band[0] : s === 'mids' ? sound.band[1] : s === 'highs' ? sound.band[2] : s === 'beat' ? sound.kick
+  : s === 'volume' ? sound.level : s === 'tone' ? sound.tone : sound.groove;
+const patch = {
+  rows: [], out: { flash: 0, zoom: 0, rotate: 0, color: 0, wide: 0, tall: 0, shake: 0, speed: 0 }, flash: 0,
+  row(src, to, amt, feel) { return { src: P_SRC[src] ? src : 'bass', to: P_DO[to] ? to : 'zoom', amt: num(amt, 0, 1, .5), feel: P_FEEL[feel] ? feel : 'smooth', env: 0, up: false, m: [] }; },
+  load() { const v = store.get(PATCH_KEY, null); this.rows = Array.isArray(v) ? v.slice(0, 12).map(r => r && this.row(r.src, r.to, r.amt, r.feel)).filter(Boolean) : []; },
+  save() { store.set(PATCH_KEY, this.rows.map(r => ({ src: r.src, to: r.to, amt: r.amt, feel: r.feel }))); },
+  tick(dt) {
+    const o = this.out; for (const k in o) o[k] = 0;
+    this.flash *= Math.exp(-dt * 5.5);
+    for (const r of this.rows) {
+      const x = pSrc(r.src), f = P_FEEL[r.feel];
+      let a = x > r.env ? f[0] : f[1]; if (r.to === 'color') a = Math.max(a, .25);     /* colors never jump: a fast swing reads as flashing */
+      r.env += (x - r.env) * (1 - Math.exp(-dt / a));
+      if (r.to !== 'flash') { o[r.to] += r.env * r.amt; continue; }
+      /* a flash fires when the sound crosses the middle on its way up, and at most three times a second,
+         counted together with the show's Light fader, for people sensitive to flashing light */
+      if (r.env < .4) r.up = false;
+      else if (r.env > .55 && !r.up) {
+        r.up = true; const since = sound.clock - sound.lastLight;     /* joining the flash the hit just fired adds no extra flash */
+        if (since >= .34 || since < .06) { this.flash = Math.max(this.flash, r.amt); if (since >= .34) sound.lastLight = sound.clock; }
+      }
+    }
+    o.flash = this.flash;
+  },
+  /* the little bar under each row: what that link hears right now */
+  meters() { for (const r of this.rows) { const v = r.env.toFixed(2); r.m.forEach(e => { if (e.__v !== v) { e.__v = v; e.style.setProperty('--v', v); } }); } },
+};
+patch.load();
+const patchHosts = [$('#smPatch'), $('#tnPatch')];
+function patchRender() {
+  patchHosts.forEach(host => {
+    host.textContent = '';
+    patch.rows.forEach((r, i) => {
+      if (host === patchHosts[0]) r.m = [];
+      const w = el('div', 'pr'), mk = (list, v, label) => { const s = el('select'); s.setAttribute('aria-label', label); Object.entries(list).forEach(([k, t]) => { const o = el('option', '', t); o.value = k; s.append(o); }); s.value = v; return s; };
+      const s = mk(P_SRC, r.src, 'Sound'), d = mk(P_DO, r.to, 'What it does');
+      s.onchange = () => { r.src = s.value; patch.save(); patchRender(); }; d.onchange = () => { r.to = d.value; patch.save(); patchRender(); };
+      const x = el('button', 'pr-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Remove this link');
+      x.onclick = () => { patch.rows.splice(i, 1); patch.save(); patchRender(); };
+      const amt = el('input'); amt.type = 'range'; amt.min = '0'; amt.max = '1'; amt.step = '0.05'; amt.value = r.amt; amt.setAttribute('aria-label', 'How much'); amt.style.setProperty('--p', r.amt);
+      amt.oninput = () => { r.amt = +amt.value; amt.style.setProperty('--p', amt.value); }; amt.onchange = () => { patch.save(); patchRender(); };
+      const feel = el('div', 'tn-fx'); feel.setAttribute('role', 'group'); feel.setAttribute('aria-label', 'Feel');
+      Object.entries(P_FEEL).forEach(([k, f]) => { const b = el('button', '', f[2]); b.type = 'button'; b.setAttribute('aria-pressed', String(r.feel === k)); b.onclick = () => { r.feel = k; patch.save(); patchRender(); }; feel.append(b); });
+      const m = el('i', 'pr-m'); r.m.push(m);
+      w.append(s, el('span', 'pr-ar', '→'), d, x, amt, feel, m); host.append(w);
+    });
+    if (!patch.rows.length) host.append(el('p', 'hint', 'Link a part of the sound to what the picture does.'));
+    const foot = el('div', 'tn-fx');
+    const add = el('button', '', '+ Add a link'); add.type = 'button'; add.disabled = patch.rows.length >= 12;
+    add.onclick = () => { patch.rows.push(patch.row('bass', 'zoom', .5, 'smooth')); patch.save(); patchRender(); };
+    foot.append(add);
+    P_START.forEach(p => { const b = el('button', '', p.name); b.type = 'button'; b.onclick = () => { patch.rows = p.rows.map(r => patch.row(...r)); patch.save(); patchRender(); }; foot.append(b); });
+    host.append(foot);
+  });
+}
+patchRender();
 
 /* With music on, every hit does five things to the picture, each as far as its fader says: it punches toward the viewer,
    flares, swings its colors, jolts with a ripple running outward, and lunges forward. Flow adds what is not a hit: the
@@ -2651,11 +2753,15 @@ function reactCfg(c, o) {
   o.grain = Math.min(1, c.grain + .35 * sound.air + fl * .15 * sound.noise);
   o.rk = Math.min(1, tune.light * 1.2 * sound.light);             /* the effects' own answer to a hit: as capped as the flare */
   o.rl = sound.level;
+  const p = patch.out;                                            /* and what the patch adds on top */
+  o.rz += p.zoom * .5; o.rh += p.color * 2.2; o.rr = p.rotate * .5; o.rwx = p.wide * .35; o.rwy = p.tall * .35;
+  o.rg += p.flash * .9; o.rf += p.flash * .14; o.rk = Math.min(1, o.rk + p.flash);
+  o.rsx += p.shake * .035 * Math.sin(sound.clock * 41); o.rsy += p.shake * .035 * Math.cos(sound.clock * 33);
   return o;
 }
 /* how much faster the motion runs: fuller music drifts faster, a hit throws it forward, and Flow leans it toward the tempo */
 const reactPush = () => !sound.mode || reduced ? 1 :
-  (1 + tune.speed * (2.5 * sound.level + 16 * sound.kick)) * (sound.bpm ? 1 + tune.flow * .6 * (sound.bpm / 120 - 1) : 1);
+  (1 + tune.speed * (2.5 * sound.level + 16 * sound.kick)) * (sound.bpm ? 1 + tune.flow * .6 * (sound.bpm / 120 - 1) : 1) * (1 + 3 * patch.out.speed);
 
 /* ================= show ================= */
 /* The same wallpapers as a full-screen projection, for a wall, a TV or a screen behind a band. It opens with the design that
@@ -2963,6 +3069,7 @@ function frame(now) {
   const dt = Math.min(.1, (now - last) / 1000); last = now;
   govTick(dt);
   bgTick(dt);
+  if (sound.mode && !reduced) { patch.tick(dt); patch.meters(); }
   if (show.open) show.tick(dt);
   else if (view === 'studio') studio.tick(dt);
   else if (detailDlg.open) detailTick(dt);
@@ -2972,7 +3079,7 @@ function frame(now) {
 bgTick(0); requestAnimationFrame(frame);
 window.addEventListener('resize', () => { bgDirty = true; studio.dirty = true; });
 /* test hook: lets an automated check read state without touching the UI */
-window.__mihot = { tune, PRESETS, tuneOpen, reactCfg, musicSync, PAL, sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
+window.__mihot = { tune, PRESETS, tuneOpen, reactCfg, patch, musicSync, PAL, sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
 })();
 </script>
 </body>
