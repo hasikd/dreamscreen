@@ -262,7 +262,7 @@ dialog.closing::backdrop{animation:fadeout .28s ease both}
 .tn-pre button,.tn-fx button{border:0;background:none;padding:5px 0;font:400 .7rem/1.1 var(--font-body);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);transition:color .4s}
 .tn-pre button:hover,.tn-fx button:hover{color:var(--fg)}
 .tn-pre button[aria-pressed="true"],.tn-fx button[aria-pressed="true"]{color:var(--fg);text-decoration:underline;text-underline-offset:5px}
-.tn-eq{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.tn-eq{position:relative;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
 .tune .tn-meter{position:absolute;inset:0 0 auto 0;width:100%;height:132px;opacity:.26;pointer-events:none}
 .fd{position:relative;display:grid;justify-items:center;gap:8px;font:400 .66rem/1 var(--font-body);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .fd-t{--p:.5;position:relative;width:100%;height:132px;cursor:ns-resize;touch-action:none;-webkit-tap-highlight-color:transparent}
@@ -368,6 +368,7 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
 .seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;padding:3px;background:var(--surface);border:1px solid var(--line);border-radius:999px}
 .seg button{border:0;background:none;padding:8px 10px;border-radius:999px;font-weight:400;color:var(--muted);transition:background .6s var(--ease),color .5s}
 .seg button[aria-pressed="true"]{background:var(--raised);color:var(--fg)}
+.seg.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .color-row.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .licence{display:grid;justify-items:start;gap:10px;padding:14px 16px;border-radius:var(--r-ctl);background:var(--raised);font-size:.92rem}
 .licence p{color:var(--muted)}
@@ -480,6 +481,21 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
           </details>
 
           <details class="fold" open><summary>Effect</summary><div class="fx-grid" id="fxGrid"></div></details>
+
+          <details class="fold" open><summary>Music</summary>
+            <div class="group">
+              <div class="seg three" id="smSrc" role="group" aria-label="Music source">
+                <button type="button" id="smMic" aria-pressed="false" aria-label="Mic: move with the sound in the room">Mic</button>
+                <button type="button" id="smSong" aria-pressed="false" aria-label="Song: play a music file and move with it">Song</button>
+                <button type="button" id="smPc" aria-pressed="false" aria-label="Computer: move with whatever your computer is playing">Computer</button>
+              </div>
+              <p class="hint" id="smInfo" role="status" aria-live="polite"></p>
+              <div class="tn-fx" id="smStyle" role="group" aria-label="Music style"></div>
+              <div class="group" id="smFaders"></div>
+              <p class="hint">High settings flash. Keep them low around anyone sensitive to flashing light.</p>
+              <input type="file" id="smFile" accept="audio/*" hidden>
+            </div>
+          </details>
 
           <details class="fold"><summary>Colors</summary>
             <div class="group">
@@ -610,7 +626,8 @@ progress{width:100%;height:4px;accent-color:var(--accent)}
   </div>
   <div class="tune" id="tune" role="group" aria-label="Tune the show" hidden>
     <div class="tn-sec">
-      <div class="tn-head"><span class="tn-t">Reaction</span><div class="tn-pre" id="tnPre" role="group" aria-label="Reaction preset"></div></div>
+      <span class="tn-t">Reaction</span>
+      <div class="tn-fx" id="tnPre" role="group" aria-label="Music style"></div>
       <div class="tn-eq" id="tnEq"><canvas class="tn-meter" id="tnMeter" width="336" height="132" aria-hidden="true"></canvas></div>
       <p class="tn-hint" id="tnHint">Switch on Mic, Song or Computer and the picture moves with the music.</p>
       <p class="tn-hint">High settings flash. Keep them low around anyone sensitive to flashing light.</p>
@@ -645,6 +662,9 @@ const COMMON = `#ifndef OCT
 precision highp float;
 uniform vec2 u_res;uniform float u_time,u_loop;uniform vec3 u_c0,u_c1,u_c2,u_c3;
 uniform float u_scale,u_int,u_grain,u_vig,u_seed,u_imgOn,u_imgAspect,u_fxOver;
+/* u_kick (a drum hit, 0..1, never more than three a second, like the show's flare) and u_lvl (how full the music is, 0..1) are set only on a stage that reacts to music.
+   Everywhere else, the gallery and every download included, they stay 0 and the effects look as they always did. */
+uniform float u_kick,u_lvl;
 uniform sampler2D u_img;
 vec2 SO;float TP;
 float h21(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
@@ -941,6 +961,112 @@ float lb=exp(-length((P-b)*vec2(.8,.65))*3.4);
 float lc2=exp(-length((P-c)*vec2(.5,1.))*3.);
 float v=(la*.85+lb*.8+lc2*.65)*(.3+f2*.95)*(.55+.8*st);
 return pal(clamp(v*.72,0.,1.));}` },
+
+/* ---- made for kinds of music; u_kick and u_lvl let each one answer the beat in its own way ---- */
+grid: { name: 'Horizon', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float hz=-.06;
+vec3 col=u_c0+u_c1*.5*exp(-max(P.y-hz,0.)*3.2)*step(hz,P.y);
+col+=stars(P,140.,t,2.)*.45*smoothstep(hz+.15,hz+.45,P.y);
+vec2 sc=vec2(.02*ls(.05,SO.x),hz+.21);float sr=.23*(1.+.05*u_kick);
+float sd=length(P-sc),sy=(P.y-sc.y)/sr;
+float sun=1.-smoothstep(sr-.006,sr,sd);
+float gap=sy<0.?step(fract(sy*7.+lf(.25)),.08-sy*.42):0.;
+sun*=1.-gap;
+col=mix(col,mix(u_c2,u_c3,smoothstep(-1.,1.,sy)),sun*min(u_int,1.));
+col+=u_c2*.32*exp(-max(sd-sr,0.)*6.)*u_int*(1.+.5*u_kick);
+if(P.y<hz){float d=max(hz-P.y,1e-3);float z=.16/d;
+vec2 g=vec2(P.x*z*2.,z*.9+lf(.35));vec2 gf=abs(fract(g)-.5);
+float lw=.035+.01*z;float gm=max(gf.x,gf.y);float ln=smoothstep(.5-lw,.5,gm)+.35*exp(-(.5-gm)*14.);
+float fade=exp(-z*.16);
+col=u_c0*.7+u_c1*.35*exp(-d*7.);
+col+=pal(.75)*ln*fade*.8*u_int*(1.+.7*u_lvl);
+col+=u_c2*.22*exp(-d*24.)*u_int;}
+return col;}` },
+
+tunnel: { name: 'Tunnel', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec2 q=p+.06*vec2(ls(.11,SO.x),lc(.09,SO.y));
+float r=length(q)+1e-3,a=atan(q.y,q.x);
+float z=.9/r;
+float ring=abs(fract(z-lf(.5))-.5);
+float rl=1.-smoothstep(0.,.06+.03*u_kick,ring);rl+=.35*exp(-ring*9.);
+float fade=smoothstep(.03,.3,r)*exp(-r*.9);
+vec3 col=u_c0+u_c1*.12*exp(-r*2.);
+col+=pal(clamp(.3+.7*rl*fade,0.,1.))*rl*fade*1.1*u_int*(1.+.9*u_kick);
+col+=u_c1*.16*pow(.5+.5*cos(a*8.+lp(.07)),10.)*fade*u_int;
+col+=u_c3*.25*exp(-r*9.)*u_int*(1.+u_lvl);
+return col;}` },
+
+smoke: { name: 'Smoke', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float f1=fbm(vec2(p.x*1.4,p.y*1.1)+SO+dr(.05));
+float f2=fbm(vec2(p.x*2.4,p.y*1.7)+f1*1.6+dr(.04).yx);
+float smoke=smoothstep(.25,.85,f2);
+vec3 col=u_c0+u_c1*smoke*.16;
+for(int i=0;i<3;i++){float fi=float(i);
+float ang=(fi-1.)*-.32+.2*ls(.06+fi*.02,fi*2.1+SO.x);
+vec2 d=P-vec2((fi-1.)*.6,-.62);
+float al=d.x*sin(ang)+d.y*cos(ang),ac=d.x*cos(ang)-d.y*sin(ang);
+float cone=(1.-smoothstep(0.,.04+max(al,0.)*.24,abs(ac)))*step(0.,al)*exp(-al*1.05);
+col+=pal(.5+.22*fi)*cone*(.2+1.15*smoke)*u_int*(1.+.6*u_kick);}
+col+=u_c3*.14*exp(-abs(P.y+.62)*14.)*u_int;
+return col*(1.+.3*u_lvl);}` },
+
+bars: { name: 'Bars', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float N=floor(22./u_scale)+2.;float x=uv.x*N,id=floor(x),f=fract(x);
+float h=.18+.3*(.5+.5*sin(id*.7+lp(.3)+SO.x))*(.6+.4*sin(id*.23-lp(.17)+SO.y))+.16*u_lvl+.2*u_kick*(.5+.5*sin(id*1.7+SO.y));
+float y=uv.y-.2;
+float col_=1.-smoothstep(.28,.46,abs(f-.5));
+float body=col_*(1.-smoothstep(h-.03,h,y))*step(0.,y);
+float refl=col_*(1.-smoothstep(0.,h*.5,-y))*step(y,0.)*.28;
+float haze=fbm(vec2(uv.x*3.,uv.y*2.)+SO+dr(.03));
+vec3 col=u_c0+u_c1*.18*haze*exp(-abs(y)*3.);
+col+=pal(clamp(.3+.7*y/max(h,.01),0.,1.))*body*u_int;
+col+=pal(.5)*refl*u_int;
+col+=u_c3*.6*col_*exp(-abs(y-h)*90.)*step(0.,y)*u_int;
+col+=u_c2*.12*exp(-abs(y)*30.)*u_int;
+return col;}` },
+
+kaleido: { name: 'Prism', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+float r=length(p),a=atan(p.y,p.x)+lp(.03);
+float k=6.2832/6.;a=mod(a,k);a=abs(a-k*.5);
+vec2 s=r*vec2(cos(a),sin(a));
+float f=fbm(s*1.6+SO+dr(.05));
+float w=.5+.5*sin(f*6.+r*4.-lp(.25));
+float v=pow(w,1.5)*(.3+.7*smoothstep(.25,.75,f))*exp(-r*.6)*1.25*u_int;
+vec3 col=u_c0+pal(clamp(v,0.,1.))*v;
+col+=u_c3*.3*exp(-r*(8.-3.*u_kick))*u_int;
+return col;}` },
+
+lava: { name: 'Magma', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec2 q=p*3.2+SO;vec2 iq=floor(q),fq=fract(q);
+float d1=9.,d2=9.;
+for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 g=vec2(float(i),float(j));
+vec2 o=h22(iq+g);o=.5+.38*sin(6.2832*o+lp(.15));
+float d=length(g+o-fq);if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}
+float crack=exp(-(d2-d1)*(16.-6.*u_kick))+.25*exp(-(d2-d1)*4.);
+float heat=fbm(p*1.6+SO+dr(.04));
+vec3 col=u_c0+u_c1*.25*(1.-crack)*heat;
+col+=pal(clamp(crack*(.5+.9*heat)*u_int*(1.+.4*u_lvl),0.,1.))*crack;
+col+=u_c2*.1*smoothstep(.4,.9,heat)*u_int;
+return col;}` },
+
+aurora: { name: 'Aurora', src: `
+vec3 effect(vec2 uv,vec2 P,vec2 p,float t){
+vec3 col=u_c0+u_c1*.12*smoothstep(-.6,.6,P.y);
+col+=stars(P,130.,t,3.)*.4;
+for(int i=0;i<3;i++){float fi=float(i);
+float x=p.x*(1.1+fi*.3)+SO.x+fi*1.7;
+float y0=-.12+fi*.11+.12*sin(x*1.3+lp(.06)+fi)+.1*(fbm(vec2(x*.8,fi*3.)+dr(.03))-.5);
+float d=p.y-y0;
+float v=smoothstep(-.02,0.,d)*exp(-max(d,0.)*(4.5-fi));
+float rays=.55+.45*fbm(vec2(x*9.,d*.5)+dr(.05));
+col+=pal(clamp(.4+.2*fi+.4*exp(-max(d,0.)*14.),0.,1.))*v*rays*.5*u_int*(1.+.45*u_lvl);}
+return col;}` },
 };
 const FX_IDS = Object.keys(FX).filter(k => k !== 'haze');
 
@@ -960,6 +1086,14 @@ const PAL = [
   { id: 'verdigris', name: 'Verdigris', c: ['#030807', '#0f4a44', '#ff7a3a', '#f4ffe8'] },
   { id: 'redglow', name: 'Red Glow', c: ['#050202', '#6a0a0a', '#ff3a1a', '#ffe0c0'] },
   { id: 'cyan', name: 'Cyan Dusk', c: ['#03070c', '#0d4a7a', '#34c8ff', '#ffe0cc'] },
+  { id: 'synth', name: 'Synth', c: ['#07031a', '#3a0d6e', '#ff2e88', '#ffd45e'] },
+  { id: 'steel', name: 'Steel', c: ['#030304', '#1c1f2b', '#aab6ff', '#ffffff'] },
+  { id: 'trap', name: 'Trap', c: ['#06020b', '#3b0b63', '#a23cff', '#ffb8f2'] },
+  { id: 'tape', name: 'Tape', c: ['#0b0806', '#3a2a22', '#e09a5a', '#ffe9c8'] },
+  { id: 'rave', name: 'Rave', c: ['#030008', '#00a3a3', '#ff1fb4', '#f4ff4a'] },
+  { id: 'magma', name: 'Magma', c: ['#040202', '#3a0704', '#ff4a0a', '#ffd88a'] },
+  { id: 'polar', name: 'Polar', c: ['#020610', '#0a3a5a', '#38e0b0', '#eafff6'] },
+  { id: 'brass', name: 'Brass', c: ['#070509', '#26173d', '#d4a24a', '#fff2d8'] },
 ];
 const palById = id => PAL.find(p => p.id === id) || PAL[0];
 
@@ -988,6 +1122,21 @@ const ITEMS = [
   { id: 'blue-hour-beam', name: 'Blue Hour Beam', fx: 'beam', pal: 'cyan', live: true, cat: 'Light', price: 1.44, seed: 19, desc: 'A cyan beam over still water.' },
   { id: 'echo', name: 'Echo', fx: 'echo', pal: 'violetfire', live: true, cat: 'Y2K', price: 1.44, seed: 5, desc: 'A glowing shape sends soft copies of itself into the dark, each smaller and bluer than the last.' },
   { id: 'red-room', name: 'Red Room', fx: 'fold', pal: 'redglow', live: true, cat: 'Light', price: 1.44, seed: 15, desc: 'A red glow pooling under a standing sheet of black.' },
+  /* made for kinds of music: the category names the music */
+  { id: 'outrun', name: 'Outrun', fx: 'grid', pal: 'synth', live: true, cat: 'Synthwave', price: 1.44, seed: 3, grain: .55, desc: 'A striped sun sinking behind an endless neon grid.' },
+  { id: 'night-drive', name: 'Night Drive', fx: 'grid', pal: 'cyan', live: true, cat: 'Synthwave', price: 1.44, seed: 12, grain: .55, desc: 'A cold sun over a grid that never ends.' },
+  { id: 'warehouse', name: 'Warehouse', fx: 'tunnel', pal: 'steel', live: true, cat: 'Techno', price: 1.44, seed: 8, grain: .7, desc: 'Steel rings rushing past in the dark.' },
+  { id: 'acid-tunnel', name: 'Acid Tunnel', fx: 'tunnel', pal: 'acid', live: true, cat: 'Techno', price: 1.44, seed: 21, grain: .6, desc: 'Lime and orange rings falling toward you.' },
+  { id: 'purple-smoke', name: 'Purple Smoke', fx: 'smoke', pal: 'trap', live: true, cat: 'Hip-hop', price: 1.44, seed: 5, grain: .7, desc: 'Three stage lights cutting through violet smoke.' },
+  { id: 'stage-lights', name: 'Stage Lights', fx: 'smoke', pal: 'redglow', live: true, cat: 'Hip-hop', price: 1.44, seed: 17, grain: .7, desc: 'Red beams in a smoky room before the drop.' },
+  { id: 'tape-deck', name: 'Tape Deck', fx: 'bars', pal: 'tape', live: true, cat: 'Lo-fi', price: 1.44, seed: 9, grain: .85, desc: 'Warm bars rising and falling like an old cassette deck.' },
+  { id: 'late-set', name: 'Late Set', fx: 'bars', pal: 'brass', live: true, cat: 'Jazz', price: 1.44, seed: 26, grain: .8, desc: 'Brass light on a dark stage, late in the night.' },
+  { id: 'peak-time', name: 'Peak Time', fx: 'kaleido', pal: 'rave', live: true, cat: 'Rave', price: 1.44, seed: 4, grain: .5, desc: 'A turning prism of pink, cyan and acid yellow.' },
+  { id: 'third-eye', name: 'Third Eye', fx: 'kaleido', pal: 'iris', live: true, cat: 'Rave', price: 1.44, seed: 31, grain: .55, desc: 'A slow kaleidoscope in violet and gold.' },
+  { id: 'molten', name: 'Molten', fx: 'lava', pal: 'magma', live: true, cat: 'Metal', price: 1.44, seed: 7, grain: .65, desc: 'Black rock splitting over a glowing core.' },
+  { id: 'overdrive', name: 'Overdrive', fx: 'lava', pal: 'violetfire', live: true, cat: 'Rock', price: 1.44, seed: 14, grain: .65, desc: 'Hot pink cracks running through dark stone.' },
+  { id: 'polar-drift', name: 'Polar Drift', fx: 'aurora', pal: 'polar', live: true, cat: 'Ambient', price: 1.44, seed: 2, grain: .6, desc: 'Green curtains of light over a still night.' },
+  { id: 'night-choir', name: 'Night Choir', fx: 'aurora', pal: 'lilac', live: true, cat: 'Ambient', price: 1.44, seed: 19, grain: .6, desc: 'Lilac light folding slowly across the stars.' },
 ];
 const LOOP = 20;
 /* How fast a wallpaper moves in the gallery, in its detail view and as a fresh Studio template: the same everywhere,
@@ -1006,7 +1155,7 @@ const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 const rgbCache = new Map();
 const rgbOf = h => { let v = rgbCache.get(h); if (!v) { v = hexRgb(h); rgbCache.set(h, v); } return v; };
 const UNIFORMS = ['u_res', 'u_time', 'u_loop', 'u_c0', 'u_c1', 'u_c2', 'u_c3', 'u_scale', 'u_int', 'u_grain', 'u_vig', 'u_seed', 'u_imgOn', 'u_imgAspect', 'u_fxOver', 'u_img',
-  'u_zoom', 'u_gain', 'u_flash', 'u_hue', 'u_shift', 'u_ring'];
+  'u_zoom', 'u_gain', 'u_flash', 'u_hue', 'u_shift', 'u_ring', 'u_kick', 'u_lvl'];
 /* One WebGL context. Options:
    preserve: keep the drawing buffer (for copying it elsewhere)
    oct:      octaves of noise (4 for small or blurred canvases, 5 by default)
@@ -1076,6 +1225,7 @@ class Stage {
     if (this.react) {                                             /* what a drum hit does to the picture; at rest these change nothing */
       gl.uniform1f(u.u_zoom, cfg.rz || 0); gl.uniform1f(u.u_gain, cfg.rg == null ? 1 : cfg.rg); gl.uniform1f(u.u_flash, cfg.rf || 0); gl.uniform1f(u.u_hue, cfg.rh || 0);
       gl.uniform2f(u.u_shift, cfg.rsx || 0, cfg.rsy || 0); gl.uniform3f(u.u_ring, cfg.rrR || 0, cfg.rrA || 0, 34);
+      gl.uniform1f(u.u_kick, cfg.rk || 0); gl.uniform1f(u.u_lvl, cfg.rl || 0);
     }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     return true;
@@ -1385,6 +1535,8 @@ function go(v, push = true) {
   if (view === 'gallery') $('#tabGallery').setAttribute('aria-current', 'page'); else $('#tabStudio').setAttribute('aria-current', 'page');
   if (push) { try { history.replaceState(null, '', '#' + view); } catch (e) {} window.scrollTo(0, 0); }
   if (view === 'studio') studio.enter(); else setAccent(DEFAULT_ACCENT);
+  /* the Studio's music does not follow into the gallery: the mic is let go and a song stops */
+  if (view === 'gallery' && prevView === 'studio' && sound.mode && !show.open) { sound.stop(); soundSync(); }
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
 
@@ -1682,10 +1834,12 @@ const locked = () => { const b = baseItem(); return !!b && !isOwned(b.id); };
 
 const studio = {
   stage: null, phase: 5, playing: true, dirty: true, ovDirty: true, ovKey: '', box: null, drag: null,
-  thumbs: [], cThumbs: [], styleKind: '', licSig: '', thumbTimer: 0, cTimer: 0, saveTimer: 0, built: false, acc: 0, onScreen: true, ar: '', palKey: '',
+  thumbs: [], cThumbs: [], styleKind: '', licSig: '', thumbTimer: 0, cTimer: 0, saveTimer: 0, built: false, acc: 0, onScreen: true, ar: '', palKey: '', live: {}, infoT: 0,
   enter() { if (!this.built) this.build(); setAccent(S.colors[2]); this.dirty = true; this.ovDirty = true; this.sync(); setTimeout(() => loadJSZip().catch(() => {}), 2500); },
   build() {
-    this.built = true; this.stage = new Stage($('#studioCanvas'), { async: true, power: 'default' });
+    /* react: the Studio moves with music too. With no music the reacting main() draws exactly what MAIN draws, so the
+       preview still matches the gallery and the downloads, which never react. */
+    this.built = true; this.stage = new Stage($('#studioCanvas'), { async: true, power: 'default', react: true });
     const fxGrid = $('#fxGrid');
     FX_IDS.forEach(id => {
       const b = el('button', 'fx'); b.type = 'button'; b.dataset.fx = id; const cv = el('canvas'); cv.width = 240; cv.height = 135;
@@ -1862,6 +2016,7 @@ const studio = {
     /* the sliders are lit in the colors of the wallpaper */
     const pk = S.colors.join(); if (this.palKey !== pk) { this.palKey = pk; [1, 2, 3].forEach(i => document.documentElement.style.setProperty('--w' + i, S.colors[i])); }
     if (!this.thumbs.drawn) { this.thumbs.drawn = true; this.drawThumbs(); this.drawClockThumbs(); }
+    musicSync();
   },
   paintOverlay() {
     const ov = $('#overlayCanvas'), r = ov.getBoundingClientRect(); if (!r.width) return;
@@ -1875,15 +2030,18 @@ const studio = {
   },
   tick(dt) {
     if (!this.built) return;
-    const cv = $('#studioCanvas'), moving = S.motion !== 'still' && this.playing && !reduced;
+    const cv = $('#studioCanvas'), music = !!sound.mode && !reduced, moving = S.motion !== 'still' && this.playing && !reduced;
     if (S.motion === 'still') { const ph = S.frame * S.loop; if (ph !== this.phase) { this.phase = ph; this.dirty = true; } }
-    else if (moving) { this.phase = (this.phase + dt * S.speed) % S.loop; this.acc += dt; if (this.acc >= frameGap()) { this.acc = 0; this.dirty = true; } }
+    else if (moving) this.phase = (this.phase + dt * S.speed * reactPush()) % S.loop;
+    /* with music on, even a still or paused picture answers the beat, so it is drawn every frame */
+    if (moving || music) { this.acc += dt; if (this.acc >= frameGap()) { this.acc = 0; this.dirty = true; } }
+    if (sound.mode && (this.infoT += dt) > .5) { this.infoT = 0; musicInfo(); }
     if (!this.onScreen) return;
-    const bw = cv.width, bh = cv.height; fitCanvasPx(cv, isFull() ? STUDIO_FULL_PX : moving ? STUDIO_PX : STUDIO_STILL_PX);
+    const bw = cv.width, bh = cv.height; fitCanvasPx(cv, isFull() ? STUDIO_FULL_PX : moving || music ? STUDIO_PX : STUDIO_STILL_PX);
     if (bw !== cv.width || bh !== cv.height) this.dirty = true;
     this.paintOverlay();
     if (!this.dirty) return;
-    const cfg = sCfg(), r = this.stage.draw(cfg, this.phase);
+    const base = sCfg(), cfg = reactCfg(base, this.live), r = this.stage.draw(cfg, this.phase);
     if (r === null) return;                                   /* shader still compiling: the old frame stays, try again next frame */
     if (!r && !this.stage.gl) paintFallback(cv, cfg.colors);
     this.dirty = false;
@@ -2295,26 +2453,84 @@ $('#xLV').onclick = guarded(exportLively); $('#xImg').onclick = guarded(exportIm
    before: a drum makes the low end rise and, with its crack, makes a great many higher frequencies jump at the same moment;
    a held note or a pad does neither. That measure is compared with its own running median, and all of it is measured
    against the loudest frequency of the last moments, so it behaves the same at any volume. */
-/* How hard each part of the picture answers a hit, 0 to 1. The Tune panel's faders set these; the presets are starting points. */
-const TUNE_KEY = 'dreamscreen.tune', TUNE_KEYS = ['zoom', 'light', 'color', 'shake', 'speed'];
+/* How hard each part of the picture answers the music, 0 to 1. The faders in the Tune panel and in the Studio set these;
+   the styles are starting points, one for each kind of music. Flow is not about hits: it lets the colors drift with the
+   key of the music, the brightness with its tone, and the motion breathe with its tempo. */
+const TUNE_KEY = 'dreamscreen.tune', TUNE_KEYS = ['zoom', 'light', 'color', 'shake', 'speed', 'flow'];
 const TUNE_INFO = { zoom: ['Zoom', 'Zoom: how far the picture punches toward you on a hit'], light: ['Light', 'Light: how much the picture flares on a hit'],
   color: ['Color', 'Color: how far the colors swing on a hit'], shake: ['Shake', 'Shake: how hard the picture jolts and ripples on a hit'],
-  speed: ['Speed', 'Speed: how far the motion lunges forward on a hit'] };
-const PRESETS = [{ name: 'Soft', v: [.3, .25, 0, 0, .3] }, { name: 'Hard', v: [.6, .5, .4, .45, .6] }, { name: 'Wild', v: [1, .85, .85, 1, 1] }];
+  speed: ['Speed', 'Speed: how far the motion lunges forward on a hit'], flow: ['Flow', 'Flow: how far colors and drift follow the key, tone and tempo'] };
+/*                                  zoom light color shake speed flow */
+const PRESETS = [{ name: 'Techno', v: [.75, .45, .15, .35, .5, .2] }, { name: 'House', v: [.5, .4, .45, .2, .45, .5] },
+  { name: 'Hip-hop', v: [.8, .3, .2, .6, .2, .25] }, { name: 'Drum & bass', v: [.55, .4, .3, .7, .9, .3] },
+  { name: 'Rock', v: [.5, .55, .3, .75, .5, .2] }, { name: 'Metal', v: [.95, .7, .5, 1, .85, .15] },
+  { name: 'Pop', v: [.45, .5, .6, .25, .45, .45] }, { name: 'Lo-fi', v: [.2, .15, .1, .05, .2, .7] },
+  { name: 'Ambient', v: [.1, .1, 0, 0, .15, .9] }];
 const tune = {}; TUNE_KEYS.forEach((k, i) => { tune[k] = PRESETS[1].v[i]; });
 (() => { const v = store.get(TUNE_KEY, null); if (v && typeof v === 'object') TUNE_KEYS.forEach(k => { const n = +v[k]; if (n >= 0 && n <= 1) tune[k] = n; }); })();
+/* Meyda (github.com/meyda/meyda) reads the character of the sound: how bright it is (spectral centroid), how noisy
+   (flatness) and which notes ring (chroma). It loads with the first music source; without it the beats work as before. */
+let meydaLoading = null;
+const loadMeyda = () => window.Meyda ? Promise.resolve() : (meydaLoading = meydaLoading || new Promise((res, rej) => {
+  const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/meyda@5.6.3/dist/web/meyda.min.js'; sc.async = true;
+  sc.integrity = 'sha384-A9cG6npy8TdRPret4WK6bUm358bvHeJiInc1dm6HWeNfrj4JD7EsYlzCapkvAx1t'; sc.crossOrigin = 'anonymous';
+  sc.onload = () => window.Meyda ? res() : rej(); sc.onerror = () => { meydaLoading = null; sc.remove(); rej(); };
+  document.head.append(sc);
+}));
 const sound = {
   ctx: null, an: null, db: null, prev: null, ring: [], rt: [], ri: 0, ht: [], hv: [], src: null, stream: null, el: null, elNode: null, url: '', mode: '',
   kick: 0, light: 0, level: 0, air: 0, beats: 0, amp: 0, since: 9, ratio: 1, sign: 1, dx: 1, dy: 0, ref: -110, peak: .1, clock: 0, lastLight: -9, quiet: 0, warned: false, timer: 0, tLast: 0, gen: 0,
+  /* from Meyda: tone 0 dark .. 1 bright, noise 0 tonal .. 1 noisy, keyAng the key on the circle of fifths, keyAmt how clear it is */
+  meyda: null, td: null, fi: 0, fdt: 0, tone: .5, noise: 0, kx: 0, ky: 0, keyAng: 0, keyAmt: 0,
+  /* tempo: bt the times of recent hits, bpm the tempo found in them (0 while unsure), gph a beat clock locked to it, groove 1 on the beat */
+  bt: [], bpm: 0, vote: 0, cand: 0, gph: 0, groove: 0,
   ensure() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('no audio');
       this.ctx = new AC(); this.an = this.ctx.createAnalyser(); this.an.fftSize = 2048; this.an.smoothingTimeConstant = 0;
-      const n = this.an.frequencyBinCount; this.db = new Float32Array(n);
+      const n = this.an.frequencyBinCount; this.db = new Float32Array(n); this.td = new Float32Array(this.an.fftSize);
       for (let i = 0; i < 6; i++) { this.ring.push(new Float32Array(n)); this.rt.push(-1); }       /* the last few frames, to compare against */
       this.prev = this.ring[0];
     }
+    if (!this.meyda) loadMeyda().then(() => {
+      const M = window.Meyda; Object.assign(M, { bufferSize: this.td.length, sampleRate: this.ctx.sampleRate, melBands: 26, chromaBands: 12, numberOfMFCCCoefficients: 13, windowingFunction: 'hanning' });
+      this.meyda = M;
+    }).catch(() => {});
     if (this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  /* the character of the sound, three times slower than the beat finding: it changes slowly and the FFT is not free */
+  features(dt) {
+    const e = (cur, to, r) => cur + (to - cur) * Math.min(1, dt * r);
+    if (this.quiet > .5) { this.tone = e(this.tone, .5, 1); this.noise = e(this.noise, 0, 1); this.keyAmt = e(this.keyAmt, 0, 1); return; }
+    this.an.getFloatTimeDomainData(this.td);
+    let f; try { f = this.meyda.extract(['spectralCentroid', 'spectralFlatness', 'chroma'], this.td); } catch (err) { this.meyda = null; return; }
+    if (!f) return;
+    const hz = f.spectralCentroid * this.ctx.sampleRate / this.td.length;
+    if (hz > 0 && isFinite(hz)) this.tone = e(this.tone, Math.min(1, Math.max(0, Math.log2(hz / 250) / 4.6)), 2);    /* 250 Hz dark .. 6 kHz bright */
+    if (isFinite(f.spectralFlatness)) this.noise = e(this.noise, Math.min(1, f.spectralFlatness * 2), 2);
+    /* the notes on the circle of fifths, so related keys get related colors; it settles over a second or two, a drift and never a flash */
+    let x = 0, y = 0, s = 0;
+    if (f.chroma) f.chroma.forEach((c, i) => { if (!isFinite(c)) return; const a = (i * 7 % 12) / 12 * 6.2832; x += c * Math.cos(a); y += c * Math.sin(a); s += c; });
+    if (s > 0) { this.kx = e(this.kx, x / s, .7); this.ky = e(this.ky, y / s, .7); }
+    this.keyAng = Math.atan2(this.ky, this.kx); this.keyAmt = Math.min(1, Math.hypot(this.kx, this.ky) * 8);
+  },
+  /* The tempo: the gaps between recent hits, and the gaps between hits further apart, folded into 80 to 160 BPM and
+     counted. A new tempo has to win three times in a row before it replaces the old one, so one odd fill does not move it. */
+  tempo() {
+    const b = this.bt; if (b.length < 6) return;
+    const H = new Float32Array(41);
+    for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) {
+      let d = b[j] - b[i]; if (d > 2.5) break; if (d < .1) continue;
+      while (d > .75) d /= 2; while (d < .375) d *= 2;
+      const x = (60 / d - 80) / 2, k = Math.round(x); if (k < 0 || k > 40) continue;
+      H[k] += 1; if (k > 0) H[k - 1] += .4; if (k < 40) H[k + 1] += .4;
+    }
+    let m = 0; for (let k = 1; k <= 40; k++) if (H[k] > H[m]) m = k;
+    if (H[m] < 4) return;
+    const bpm = 80 + m * 2;
+    if (!this.bpm || Math.abs(bpm - this.bpm) <= 4) { this.bpm = this.bpm ? this.bpm * .8 + bpm * .2 : bpm; this.vote = 0; }
+    else if (bpm === this.cand) { if (++this.vote >= 3) { this.bpm = bpm; this.vote = 0; } }
+    else { this.cand = bpm; this.vote = 1; }
   },
   /* The listening runs on its own clock, a hundred times a second, and not with the picture: a large screen on a weak
      graphics chip may draw far fewer frames, and a beat that falls between two frames must still be heard on time. */
@@ -2368,6 +2584,8 @@ const sound = {
     }
     this.mode = ''; this.kick = this.light = this.level = this.air = this.amp = 0; this.since = 9; this.ref = -110; this.peak = .1;
     this.ht.length = this.hv.length = 0; this.quiet = 0; this.warned = false; this.ratio = 1; this.rt.fill(-1); this.ring.forEach(r => r.fill(0));
+    this.tone = .5; this.noise = this.kx = this.ky = this.keyAng = this.keyAmt = 0; this.fi = 0; this.fdt = 0;
+    this.bt.length = 0; this.bpm = this.vote = this.cand = this.gph = this.groove = 0;
   },
   tick(dt) {
     if (!this.mode) return;
@@ -2400,7 +2618,14 @@ const sound = {
       this.beats++; this.amp = amp; this.ratio = ratio; this.since = 0; this.dx = Math.cos(a); this.dy = Math.sin(a);
       this.kick = Math.max(this.kick, amp);
       if (this.clock - this.lastLight >= .34) { this.light = Math.max(this.light, amp); this.lastLight = this.clock; this.sign = -this.sign; }
+      if (amp > .5) {                                             /* clear hits only feed the tempo */
+        const bt = this.bt; bt.push(this.clock); while (bt.length && this.clock - bt[0] > 8) bt.shift(); this.tempo();
+        if (this.bpm) { const r = Math.round(this.gph), off = this.gph - r; if (Math.abs(off) < .3) this.gph = r + off * .5; }   /* pulls the beat clock onto the hit */
+      }
     }
+    if (this.bpm) { this.gph += dt * this.bpm / 60; this.groove = .5 + .5 * Math.cos(6.2832 * this.gph); }
+    if (this.quiet > 3 || (this.bt.length && this.clock - this.bt[this.bt.length - 1] > 4)) { this.bpm = 0; this.groove = 0; this.bt.length = 0; }
+    this.fdt += dt; if (this.meyda && ++this.fi >= 3) { this.features(this.fdt); this.fi = 0; this.fdt = 0; }
     const ease = (cur, to, up, down) => cur + (to - cur) * Math.min(1, dt * (to > cur ? up : down));
     if (top <= -80) body = high = 0;                              /* near silence: a quiet room must not read as full music */
     this.peak = Math.max(body, this.peak - dt * .03, .1);
@@ -2408,6 +2633,29 @@ const sound = {
     this.air = ease(this.air, Math.min(1, high * 2.2), 10, 3);
   },
 };
+
+/* With music on, every hit does five things to the picture, each as far as its fader says: it punches toward the viewer,
+   flares, swings its colors, jolts with a ripple running outward, and lunges forward. Flow adds what is not a hit: the
+   colors lean with the key, the brightness with the tone, and the picture breathes on the tempo once it is found.
+   The show and the Studio both draw through this. c itself is not changed; o is reused so no object is made per frame. */
+function reactCfg(c, o) {
+  if (!c || !sound.mode || reduced) return c;
+  Object.assign(o, c); const k = sound.kick, t = sound.since, jolt = tune.shake * sound.amp, fl = tune.flow;
+  o.rz = tune.zoom * (.62 * k + .05 * sound.level) + fl * .035 * sound.groove;
+  o.rg = 1 - .18 * tune.light + tune.light * sound.light;         /* a touch darker between hits, so the flare has somewhere to go */
+  o.rf = tune.light * .16 * sound.light;
+  o.rh = tune.color * 1.9 * sound.sign * Math.pow(sound.light, .7) + fl * .7 * sound.keyAmt * Math.sin(sound.keyAng);
+  const j = jolt * .055 * Math.exp(-7 * t) * Math.cos(34 * t); o.rsx = sound.dx * j; o.rsy = sound.dy * j;
+  o.rrR = t * 2.4; o.rrA = jolt * .1 * Math.exp(-3.2 * t);
+  o.intensity = c.intensity * (.9 + .1 * sound.level) * (1 + fl * .25 * (sound.tone - .5));
+  o.grain = Math.min(1, c.grain + .35 * sound.air + fl * .15 * sound.noise);
+  o.rk = Math.min(1, tune.light * 1.2 * sound.light);             /* the effects' own answer to a hit: as capped as the flare */
+  o.rl = sound.level;
+  return o;
+}
+/* how much faster the motion runs: fuller music drifts faster, a hit throws it forward, and Flow leans it toward the tempo */
+const reactPush = () => !sound.mode || reduced ? 1 :
+  (1 + tune.speed * (2.5 * sound.level + 16 * sound.kick)) * (sound.bpm ? 1 + tune.flow * .6 * (sound.bpm / 120 - 1) : 1);
 
 /* ================= show ================= */
 /* The same wallpapers as a full-screen projection, for a wall, a TV or a screen behind a band. It opens with the design that
@@ -2473,26 +2721,11 @@ const show = {
     const L = this.list[this.i].loop || LOOP; this.phase = ((this.phase % L) + L) % L;
     this.warm(); if (!tuneEl.hidden) tuneSync();
   },
-  /* With music on, every hit does five things to the picture, each as far as its fader in the Tune panel says:
-     it punches toward the viewer, flares, swings its colors, jolts with a ripple running outward, and lunges forward. */
-  cur() {
-    const c = this.list[this.i]; if (!c || !sound.mode || reduced) return c;
-    const o = Object.assign(this.live, c), k = sound.kick, t = sound.since, jolt = tune.shake * sound.amp;
-    o.rz = tune.zoom * (.62 * k + .05 * sound.level);
-    o.rg = 1 - .18 * tune.light + tune.light * sound.light;       /* a touch darker between hits, so the flare has somewhere to go */
-    o.rf = tune.light * .16 * sound.light;
-    o.rh = tune.color * 1.9 * sound.sign * Math.pow(sound.light, .7);
-    const j = jolt * .055 * Math.exp(-7 * t) * Math.cos(34 * t); o.rsx = sound.dx * j; o.rsy = sound.dy * j;
-    o.rrR = t * 2.4; o.rrA = jolt * .1 * Math.exp(-3.2 * t);
-    o.intensity = c.intensity * (.9 + .1 * sound.level);
-    o.grain = Math.min(1, c.grain + .35 * sound.air);
-    return o;
-  },
+  cur() { return reactCfg(this.list[this.i], this.live); },
   tick(dt) {
     const c = this.list[this.i]; if (!c) return;
     if (!reduced) {
-      const push = sound.mode ? 1 + tune.speed * (2.5 * sound.level + 16 * sound.kick) : 1;     /* fuller music, faster drift; a hit throws it forward */
-      this.phase = (this.phase + dt * c.speed * push) % (c.loop || LOOP);
+      this.phase = (this.phase + dt * c.speed * reactPush()) % (c.loop || LOOP);
       if (sound.mode === 'pc' && sound.quiet > 6 && !sound.warned) { sound.warned = true; showMsg('No sound is arriving. Start the music, or share again: Entire screen with \u201cAlso share system audio\u201d, or the browser tab that is playing.'); }
       if (!tuneEl.hidden) tuneMeter(dt);
       const every = SHOW_STEPS[this.step][0];
@@ -2514,7 +2747,62 @@ function showMsg(t) { shMsg.textContent = t; clearTimeout(shMsgT); if (t) shMsgT
 function soundSync() {
   $('#shMic').setAttribute('aria-pressed', String(sound.mode === 'mic')); $('#shSong').setAttribute('aria-pressed', String(sound.mode === 'song'));
   $('#shPc').setAttribute('aria-pressed', String(sound.mode === 'pc')); $('#tnHint').hidden = !!sound.mode && !reduced;
+  musicSync();
 }
+/* ---- music in the Studio: the same sources, styles and faders as the show's Tune panel, sharing one `tune` ---- */
+let smNote = '', smNoteT = 0;
+function smSay(t) { smNote = t; clearTimeout(smNoteT); if (t) smNoteT = setTimeout(() => { smNote = ''; musicInfo(); }, 6000); musicInfo(); }
+function musicInfo() {
+  const t = reduced ? 'Your system asks for reduced motion, so the wallpaper stays calm and does not react to music.'
+    : smNote || (!sound.mode ? 'Pick a source and the wallpaper moves with the music.' : sound.quiet > 1 ? 'Waiting for sound …' : sound.bpm ? Math.round(sound.bpm) + ' BPM' : 'Listening …');
+  const e = $('#smInfo'); if (e.textContent !== t) e.textContent = t;
+}
+function musicSync() {
+  if (!studio.built) return;
+  $('#smMic').setAttribute('aria-pressed', String(sound.mode === 'mic')); $('#smSong').setAttribute('aria-pressed', String(sound.mode === 'song'));
+  $('#smPc').setAttribute('aria-pressed', String(sound.mode === 'pc'));
+  TUNE_KEYS.forEach(k => {
+    const e = $('#sm-' + k), p = tune[k].toFixed(2);
+    if (+e.value !== tune[k]) e.value = tune[k];
+    if (e.__p !== p) { e.__p = p; e.style.setProperty('--p', p); }
+    const o = $('#sm-' + k + 'O'), v = Math.round(tune[k] * 100) + '%'; if (o.textContent !== v) o.textContent = v;
+  });
+  const pi = PRESETS.findIndex(p => TUNE_KEYS.every((k, i) => Math.abs(tune[k] - p.v[i]) < .005));
+  [...$('#smStyle').children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === pi)));
+  musicInfo();
+}
+const setTune = v => { TUNE_KEYS.forEach((k, i) => { tune[k] = v[i]; }); store.set(TUNE_KEY, tune); tuneSync(); };
+PRESETS.forEach(p => {
+  const b = el('button', '', p.name); b.type = 'button'; b.onclick = () => setTune(p.v); $('#smStyle').append(b);
+});
+TUNE_KEYS.forEach(k => {
+  const l = el('label', 'sl'), i = el('input'), o = el('output'); o.id = 'sm-' + k + 'O';
+  i.type = 'range'; i.id = 'sm-' + k; i.min = '0'; i.max = '1'; i.step = '0.05'; i.setAttribute('aria-label', TUNE_INFO[k][1]);
+  i.addEventListener('input', () => { tune[k] = +i.value; store.set(TUNE_KEY, tune); tuneSync(); });
+  l.append(el('span', '', TUNE_INFO[k][0]), i, o); $('#smFaders').append(l);
+});
+if (!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) { $('#smPc').hidden = true; $('#smSrc').classList.remove('three'); }
+$('#smMic').onclick = async () => {
+  if (sound.mode === 'mic') { sound.stop(); soundSync(); return; }
+  try { await sound.mic(); smSay(''); } catch (e) { sound.stop(); smSay('The microphone is not available here. Choose a song instead.'); }
+  soundSync();
+};
+$('#smSong').onclick = () => { if (sound.mode === 'song') { sound.stop(); soundSync(); return; } $('#smFile').click(); };
+$('#smFile').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { await sound.file(f); smSay(''); } catch (err) { sound.stop(); smSay('This file could not be played. Try an MP3 or a WAV.'); }
+  soundSync();
+});
+$('#smPc').onclick = async () => {
+  if (sound.mode === 'pc') { sound.stop(); soundSync(); return; }
+  const t0 = performance.now(); smSay('In the dialog choose Entire screen and switch on “Also share system audio”. A browser tab with its audio works too.');
+  try { await sound.pc(); smSay(''); }
+  catch (e) {
+    sound.stop();
+    smSay(e && e.silent ? 'No sound came with it. Share again: choose Entire screen and switch on “Also share system audio”, or pick a browser tab with its audio.' : performance.now() - t0 < 400 ? 'The computer’s sound cannot be shared here.' : '');
+  }
+  soundSync();
+};
 /* ---- the Tune panel ---- */
 const tuneEl = $('#tune'), tnMeter = $('#tnMeter'), faders = {}, meterV = new Float32Array(28);
 function tuneSync() {
@@ -2523,6 +2811,7 @@ function tuneSync() {
   [...$('#tnPre').children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === pi)));
   const hint = $('#tnHint'); hint.hidden = !!sound.mode && !reduced;
   if (reduced) hint.textContent = 'Your system asks for reduced motion, so the picture stays calm and does not react to music.';
+  musicSync();
   const c = show.list[show.i]; if (!c) return;
   const key = c.colors.join();
   [...$('#tnFx').children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.fx === c.fx)));
@@ -2567,7 +2856,7 @@ TUNE_KEYS.forEach(k => {
 });
 PRESETS.forEach(p => {
   const b = el('button', '', p.name); b.type = 'button';
-  b.onclick = () => { TUNE_KEYS.forEach((k, i) => { tune[k] = p.v[i]; }); store.set(TUNE_KEY, tune); tuneSync(); };
+  b.onclick = () => setTune(p.v);
   $('#tnPre').append(b);
 });
 FX_IDS.forEach(id => {
@@ -2683,7 +2972,7 @@ function frame(now) {
 bgTick(0); requestAnimationFrame(frame);
 window.addEventListener('resize', () => { bgDirty = true; studio.dirty = true; });
 /* test hook: lets an automated check read state without touching the UI */
-window.__mihot = { tune, PRESETS, tuneOpen, sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
+window.__mihot = { tune, PRESETS, tuneOpen, reactCfg, musicSync, PAL, sound, show, livelyProps, FREE, S, studio, FX_IDS, GL_OK, buildWallpaperHTML, wallpaperProps, Stage, ITEMS, itemCfg, LOOP, bgStage, mini, cards, gov, toggleFull, isFull, BASE_SPEED };
 })();
 </script>
 </body>
